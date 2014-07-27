@@ -10,51 +10,34 @@ library(pixmap)
 
 #HSERVER<-"hilltopdev"
 servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
-wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
-
-featureName <- c("")
-observedProperty <- c("Flow")
 
 
-#HSERVER<-c("hilltopserver")
+
+HSERVER<-c("hilltopserver")
 
 
 # kludge for all physical sites and virtual rainfall sites is to use the subcatchmentrain.dsn which merges publictelemetry and sucatchment rain hts files
 # 
-#getSites.xml <- xmlInternalTreeParse(paste("http://",HSERVER,".horizons.govt.nz/boo.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""))
-#cat(paste("http://",HSERVER,".horizons.govt.nz/SubcatchmentRain.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""),"\n")
+getSites.xml <- xmlInternalTreeParse(paste("http://",HSERVER,".horizons.govt.nz/boo.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""))
+cat(paste("http://",HSERVER,".horizons.govt.nz/SubcatchmentRain.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""),"\n")
 
-#site.attr<-getNodeSet(getSites.xml,"//Latitude/../@Name")
-#site.list<-sapply(site.attr, as.character)
-#data.lat <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Latitude"), xmlValue)
-#data.lon <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Longitude"), xmlValue)
+site.attr<-getNodeSet(getSites.xml,"//Latitude/../@Name")
+site.list<-sapply(site.attr, as.character)
+data.lat <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Latitude"), xmlValue)
+data.lon <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Longitude"), xmlValue)
 
-# For each council server specified...
-# Assumption is that gml:pos has coordinates recorded in lat,lon order
-for(i in 1:length(servers)){
-    getSites.xml <- xmlInternalTreeParse(paste(servers[i],wfs_url[1],sep=""))
-    
-    # In WFS, the <Site> element value is the sitename
-    site.list<-sapply(getNodeSet(getSites.xml,"//gml:pos/../../../Site"),xmlValue)
-    
-    # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
-    data.latlon <- sapply(getNodeSet(getSites.xml,"//gml:pos"),xmlValue)
-    latlon <- sapply(strsplit(data.latlon," "),as.numeric)
-    data.lat <- latlon[1,]
-    data.lon <- latlon[2,]
-    
-    if(i==1){
-        ds0 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
-    } else {
-      ds <- rbind(ds0,data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE))
-    }
-}
-rm(ds0,latlon,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
-names(ds) <- c("SiteName","Lat","Lon")
-head(ds)
+ds0 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
 
-#ds1<-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
-#ds <- rbind(ds0,ds1)
+getSites.xml <- xmlInternalTreeParse(paste("http://",HSERVER,".horizons.govt.nz/SubcatchmentRain.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""))
+cat(paste("http://",HSERVER,".horizons.govt.nz/SubcatchmentRain.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""),"\n")
+
+site.attr<-getNodeSet(getSites.xml,"//Latitude/../@Name")
+site.list<-sapply(site.attr, as.character)
+data.lat <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Latitude"), xmlValue)
+data.lon <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Longitude"), xmlValue)
+
+ds1<-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+ds <- rbind(ds0,ds1)
 
 ## ===============================================================================
 ## Getting Rainfall Data
@@ -62,6 +45,27 @@ head(ds)
 # Define server logic required to plot various variables against mpg
 shinyServer(function(input, output) {
   
+  
+  #sliderValues <- reactive(function() {
+  #  value = input$intSite
+  #})
+  
+  # Compute the forumla text in a reactive function since it is 
+  # shared by the output$caption and output$mpgPlot functions
+  #formulaText <- reactive(function() {
+  #  paste("mpg ~", input$variable)
+  #})
+  
+  # Return the formula text for printing as a caption
+  #output$caption <- reactiveText(function() {
+  #  formulaText()
+  #})
+
+  
+  # Return the formula text for printing as a caption
+  #output$htsSite <- reactiveText(function() {
+  #  site.list[sliderValues()]
+  #})
   
   
   ## Attempting to output a google map
@@ -72,9 +76,8 @@ shinyServer(function(input, output) {
     
     fromDate<-strptime(input$fromdate,"%Y-%m-%d")
 
-    ##--------------------------------------------------------
-    ## The time code below needs to be pushed to a function
-    ##--------------------------------------------------------
+    ##
+   
     if(input$interval=="1 hour") {
       
       hh <- as.numeric(substr(input$fromhour,1,2))
@@ -194,14 +197,12 @@ shinyServer(function(input, output) {
         
       }
     }
-	 ##--------------------------------------------------------
-	 ## The time code above needs to be pushed to a function
-	 ##--------------------------------------------------------
-	 
-    #------------------------------------------------------------
-    # Getting the data to match up with the site list
-    # The following requests are made using the SOS2.0 service
-   
+    
+    if(input$collection=="zVirtual Rainfall"){
+	htsName <- "SubcatchmentRain"
+    } else {
+	htsName <- "boo"
+    }
     htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
     
     cat(htsURL,"\n")
@@ -230,6 +231,23 @@ shinyServer(function(input, output) {
     df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
     df$Value<-as.numeric(df$Value)
     
+    if(input$collection=="AirTemperature"){
+      maxValue=30
+      colValue="orange"
+      legendTitle="Air Temperature"
+    }
+
+    if(input$collection=="DissolvedOxygen"){
+      maxValue=100
+      colValue="cornflowerblue"
+      legendTitle="Dis. Oxygen"
+    }
+ 
+    if(input$collection=="DroughtCode"){
+      maxValue=300
+      colValue="cornflowerblue"
+      legendTitle="Drought Code"
+    }
     
     
     if(input$collection=="Flow"){
@@ -238,7 +256,17 @@ shinyServer(function(input, output) {
       legendTitle="Flow m3/s"
     }
     
-
+    if(input$collection=="FlowDistribution"){
+        maxValue=100
+        colValue="blue"
+        legendTitle="Flow Distribution"
+    }
+    
+    if(input$collection=="Humidity"){
+      maxValue=100
+      colValue="bisque3"
+      legendTitle="Humidity"
+    }
     
     if(input$collection=="Rainfall"){
       maxValue=500
@@ -246,7 +274,42 @@ shinyServer(function(input, output) {
       legendTitle="Rainfall"
     }
     
- 
+    if(input$collection=="zVirtual Rainfall"){
+      maxValue=500
+      colValue="blue"
+      legendTitle="Rainfall"
+    }
+   
+    if(input$collection=="SoilMoisture"){
+      maxValue=40
+      colValue="brown"
+      legendTitle="Soil Moisture"
+    }
+    
+    if(input$collection=="DroughtCode"){
+      maxValue=800
+      colValue="brown"
+      legendTitle="Drought Code"
+    }
+    
+    if(input$collection=="FireWeatherIndex"){
+      maxValue=50
+      colValue="red"
+      legendTitle="Fire Weather Index"
+    }
+    
+    if(input$collection=="Turbidity"){
+      maxValue=100
+      colValue="burlywood4"
+      legendTitle="Turbidity NTU"
+    }
+    
+    if(input$collection=="WaterMatters"){
+      maxValue=500
+      colValue="blue"
+      legendTitle="Flow"
+    }
+    
     
     
     #Resizing variable to a 0-100 range for plotting and putting this data into
