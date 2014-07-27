@@ -104,7 +104,7 @@ print(Sys.time() - t)
 ## ===============================================================================
 ## Merging Data For Mapping
 df<-as.data.frame(merge(ds,dd,by=c("SiteName","SiteName")))
-
+df <- df[-38,]  #####  This record contains an invalid map ref
 #colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
 df$Lat<-as.numeric(df$Lat)
 df$Lon<-as.numeric(df$Lon)
@@ -150,7 +150,7 @@ MyMap <- GetMap.bbox(bb$lonR, bb$latR, destfile = paste("Map_", maptype, ".png",
 
 
 # Controlling symbol size
-symPower=3/10
+symPower=2/10
 txtPower=0.009
 zeroAdd=0.05
 transp=0
@@ -161,17 +161,17 @@ PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.
                 cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
 }
 
-showPointLabels <- "Yes"
-if(showPointLabels=="Yes")
-{
-  TextOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
-                cex=(df$Value)^txtPower, labels=as.character(round(df$Value,0)), col="white", add=T)
-} else {
-  ## turn legend on if label not chosen
-  legend(x=-310,y=278, c("Low","Medium","High"), title=legendTitle, pch=c(20), cex=1.2,
-         pt.cex=c((5+zeroAdd)^symPower,(50+zeroAdd)^symPower,(95+zeroAdd)^symPower), text.col="white", bty="n", col=colValue, y.intersp=1.2)
-  
-}
+showPointLabels <- "No"
+#if(showPointLabels=="Yes")
+#{
+#  TextOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+#                cex=(df$Value)^txtPower, labels=as.character(round(df$Value,0)), col="white", add=T)
+#} else {
+#  ## turn legend on if label not chosen
+#  legend(x=-310,y=278, c("Low","Medium","High"), title=legendTitle, pch=c(20), cex=1.2,
+#         pt.cex=c((5+zeroAdd)^symPower,(50+zeroAdd)^symPower,(95+zeroAdd)^symPower), text.col="white", bty="n", col=colValue, y.intersp=1.2)
+#  
+#}
 
 ## Coloured Rect for Title
 rect(-320,280,320,320,col="cornflowerblue")
