@@ -1,5 +1,6 @@
 library(shiny)
 library(XML)
+library(XiMpLe)
 library(sp)
 library(RgoogleMaps)
 library(pixmap)
@@ -11,10 +12,6 @@ library(pixmap)
 #HSERVER<-"hilltopdev"
 servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
-
-featureName <- c("")
-observedProperty <- c("Flow")
-
 
 #HSERVER<-c("hilltopserver")
 
@@ -44,17 +41,62 @@ for(i in 1:length(servers)){
     data.lon <- latlon[2,]
     
     if(i==1){
-        ds0 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+        ds <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+        ds$source <- servers[i]
     } else {
-      ds <- rbind(ds0,data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE))
+        ds1 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+        ds1$source <- servers[i]
+
+        ds <- rbind(ds,ds1)
     }
 }
-rm(ds0,latlon,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
-names(ds) <- c("SiteName","Lat","Lon")
+rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
+names(ds) <- c("SiteName","Lat","Lon","source")
 head(ds)
 
-#ds1<-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
-#ds <- rbind(ds0,ds1)
+
+
+#------------------------------------------------------------
+# Getting the data to match up with the site list
+# The following requests are made using the SOS2.0 service
+
+t<-Sys.time()
+for(i in 1:length(ds[,1])){
+  
+  SOS_url <- paste(ds$source[i],"data.hts?service=SOS",
+                   "&request=GetObservation",
+                   "&featureOfInterest=",ds$SiteName[i],
+                   "&observedProperty=Rainfall",
+                   sep="")
+  #cat(SOS_url,"\n")
+  
+  err.list <- c("OK")
+  getData.xml <- xmlInternalTreeParse(SOS_url)
+  xmltop <- xmlRoot(getData.xml)
+  
+  if(xmlName(xmltop)=="ExceptionReport"){
+    err.attr<-getNodeSet(getData.xml,"//ows:Exception/@exceptionCode")
+    err.list<-sapply(err.attr, as.character)
+  }
+  
+  if(i==1){
+    a <- c(err.list)
+  } else {
+    b <- c(err.list)
+    a <- c(a,b)
+  }
+  
+  rm(err.attr,err.list)
+}
+print(Sys.time()-t)
+#ds$Rainfall <- a  ### Add flag for sites that record flow
+
+ds_flow <- subset(ds,ds$Flow == "OK")
+ds_rain <- subset(ds,ds$Rainfall == "OK")
+
+save(ds,file="dfSitesCouncils.Rdata")
+
+
 
 ## ===============================================================================
 ## Getting Rainfall Data
@@ -70,141 +112,39 @@ shinyServer(function(input, output) {
     ## Calculating the endDate of the data to retrieve based on
     ## selected interval
     
-    fromDate<-strptime(input$fromdate,"%Y-%m-%d")
-
-    ##--------------------------------------------------------
-    ## The time code below needs to be pushed to a function
-    ##--------------------------------------------------------
-    if(input$interval=="1 hour") {
-      
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+1
-      addDay <- 0
-      if(hhEnd>24){
-          hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="3 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+3
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="6 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+6
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="12 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+12
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-     } else if (input$interval=="24 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh
-      addDay <- 86400
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-
-      } else {
-      endTime<-input$fromhour
-      ## next line required to do date calculations below
-      d <- as.POSIXlt(fromDate)
-      
-      if(input$interval=="1 day") {
+    #### TIME CALCULATION ####
+    # FUNCTION CALL 
+    #endTime()
+    
+  
+   
+   
+        # In WFS, the <Site> element value is the sitename
         
-        d$mday <- d$mday+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
         
-      } else if(input$interval=="2 days") {
         
-        d$mday <- d$mday+2
-        endDate <- format(as.Date(d),"%d-%b-%Y")
         
-      } else if(input$interval=="3 days") {
+            
+        if(i==1){
+            ds0 <- data.frame(... , stringsAsFactors=FALSE)
+        } else {
+            ds1 <- data.frame(... , stringsAsFactors=FALSE)
+          
+            ds <- rbind(ds0,ds1)
+        }
+     }
+   
+    rm(ds0,latlon,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
+    names(ds) <- c("SiteName","Lat","Lon")
+    head(ds)
+    
         
-        d$mday <- d$mday+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
         
-      } else if(input$interval=="4 days") {
-        
-        d$mday <- d$mday+4
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="5 days") {
-        
-        d$mday <- d$mday+5
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="6 days") {
-        
-        d$mday <- d$mday+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if (input$interval=="1 week") {
-
-        d$mday <- d$mday+7
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="1 month") {
-      
-        d$mon <- d$mon+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }  else if  (input$interval=="3 months") {
-
-        d$mon <- d$mon+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="6 months") {
-        
-        d$mon <- d$mon+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="12 months") {
-        
-        d$year<- d$year+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }
     }
-	 ##--------------------------------------------------------
-	 ## The time code above needs to be pushed to a function
-	 ##--------------------------------------------------------
-	 
-    #------------------------------------------------------------
-    # Getting the data to match up with the site list
-    # The following requests are made using the SOS2.0 service
    
     htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
     
-    cat(htsURL,"\n")
+    #cat(htsURL,"\n")
 
     print(Sys.time()-a)
     
@@ -325,134 +265,11 @@ shinyServer(function(input, output) {
     ## Calculating the endDate of the data to retrieve based on
     ## selected interval
     
-    fromDate<-strptime(input$fromdate,"%Y-%m-%d")
+    #### TIME CALCULATION ####
+    # FUNCTION CALL 
+    #endTime()
+    
 
-    ##
-   
-   if(input$interval=="1 hour") {
-      
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+1
-      addDay <- 0
-      if(hhEnd>24){
-          hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="3 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+3
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="12 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+12
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="6 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+6
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-     } else if (input$interval=="24 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh
-      addDay <- 86400
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else {
-      endTime<-input$fromhour
-      ## next line required to do date calculations below
-      d <- as.POSIXlt(fromDate)
-      
-      if(input$interval=="1 day") {
-        
-        d$mday <- d$mday+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="2 days") {
-        
-        d$mday <- d$mday+2
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="3 days") {
-        
-        d$mday <- d$mday+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="4 days") {
-        
-        d$mday <- d$mday+4
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="5 days") {
-        
-        d$mday <- d$mday+5
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="6 days") {
-        
-        d$mday <- d$mday+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if (input$interval=="1 week") {
-
-        d$mday <- d$mday+7
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="1 month") {
-      
-        d$mon <- d$mon+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }  else if  (input$interval=="3 months") {
-
-        d$mon <- d$mon+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="6 months") {
-        
-        d$mon <- d$mon+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="12 months") {
-        
-        d$year<- d$year+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }
-    }
-
-    if(input$collection=="zVirtual Rainfall"){
-	htsName <- "SubcatchmentRain"
-    } else {
-	htsName <- "boo"
-    }
     htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
         
     print(Sys.time()-a)
