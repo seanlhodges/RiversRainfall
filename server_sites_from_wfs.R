@@ -1,6 +1,5 @@
 library(shiny)
 library(XML)
-library(XiMpLe)
 library(sp)
 library(RgoogleMaps)
 library(pixmap)
@@ -52,418 +51,138 @@ for(i in 1:length(servers)){
 }
 rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
 names(ds) <- c("SiteName","Lat","Lon","source")
-head(ds)
-
 
 
 #------------------------------------------------------------
 # Getting the data to match up with the site list
-# The following requests are made using the SOS2.0 service
+# The following requests, through the rcData function, are made using the SOS2.0 service
+# Additionally, the measurement vector below, is passed to the rcData
 
-t<-Sys.time()
-for(i in 1:length(ds[,1])){
-  
-  SOS_url <- paste(ds$source[i],"data.hts?service=SOS",
-                   "&request=GetObservation",
-                   "&featureOfInterest=",ds$SiteName[i],
-                   "&observedProperty=Rainfall",
-                   sep="")
-  #cat(SOS_url,"\n")
-  
-  err.list <- c("OK")
-  getData.xml <- xmlInternalTreeParse(SOS_url)
-  xmltop <- xmlRoot(getData.xml)
-  
-  if(xmlName(xmltop)=="ExceptionReport"){
-    err.attr<-getNodeSet(getData.xml,"//ows:Exception/@exceptionCode")
-    err.list<-sapply(err.attr, as.character)
-  }
-  
-  if(i==1){
-    a <- c(err.list)
-  } else {
-    b <- c(err.list)
-    a <- c(a,b)
-  }
-  
-  rm(err.attr,err.list)
-}
-print(Sys.time()-t)
-#ds$Rainfall <- a  ### Add flag for sites that record flow
+measurement <- c("Flow","Rainfall","Water Temperature")
 
-ds_flow <- subset(ds,ds$Flow == "OK")
-ds_rain <- subset(ds,ds$Rainfall == "OK")
-
-save(ds,file="dfSitesCouncils.Rdata")
+#dframe <- rcData(ds,measurement)
+dframe <- ds # only needed for testing
 
 
 
 ## ===============================================================================
-## Getting Rainfall Data
+## Getting Measurement Data for Mapping.
 
-# Define server logic required to plot various variables against mpg
-shinyServer(function(input, output) {
-  
-  
-  
-  ## Attempting to output a google map
-  output$gmap <- reactivePlot(function() {
-    a<-Sys.time()
-    ## Calculating the endDate of the data to retrieve based on
-    ## selected interval
-    
-    #### TIME CALCULATION ####
-    # FUNCTION CALL 
-    #endTime()
-    
-  
-   
-   
-        # In WFS, the <Site> element value is the sitename
-        
-        
-        
-        
-            
+## For each site that has flow data, get the last value ...
+df_flow <- subset(dframe,df$Flow=="OK")
+
+t <- Sys.time()
+for(i in 1:length(df_flow[ ,1])){
+
+    SOS_url <- paste(df_flow$source[i],"data.hts?service=SOS",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df_flow$SiteName[i],
+                     "&observedProperty=Flow",
+                     sep="")
+
+    getData.xml <- xmlInternalTreeParse(SOS_url)
+    xmltop <- xmlRoot(getData.xml)
+     
+    if(xmlName(xmltop)!="ExceptionReport"){
+        data.date <- sapply(getNodeSet(getData.xml, "//wml2:time"),xmlValue)
+        data.value <- sapply(getNodeSet(getData.xml, "//wml2:value"),xmlValue)
+      
         if(i==1){
-            ds0 <- data.frame(... , stringsAsFactors=FALSE)
+            dd<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
         } else {
-            ds1 <- data.frame(... , stringsAsFactors=FALSE)
-          
-            ds <- rbind(ds0,ds1)
+            dd1<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
+            dd <- rbind(dd,dd1)
         }
-     }
-   
-    rm(ds0,latlon,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
-    names(ds) <- c("SiteName","Lat","Lon")
-    head(ds)
-    
-        
-        
     }
-   
-    htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
-    
-    #cat(htsURL,"\n")
+}
 
-    print(Sys.time()-a)
-    
-    getData.xml <- xmlInternalTreeParse(htsURL)
-    
-    site.attr<-getNodeSet(getData.xml,"//E[2]/../../@SiteName")
-    site.list<-sapply(site.attr, as.character)
-    
-    data.date <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/../E[1]/T"), xmlValue)
-    data.value <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/I1"), xmlValue)
-    
-    dd<-data.frame(site.list,data.date,data.value, stringsAsFactors=FALSE)
-    ## ===============================================================================
-    
-    ## ===============================================================================
-    ## Merging Data For Mapping
-    df<-as.data.frame(merge(ds,dd,by=c("site.list","site.list")))
-    
-    colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
-    print(colnames(df))
-    df$Lat<-as.numeric(df$Lat)
-    df$Lon<-as.numeric(df$Lon)
-    df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
-    df$Value<-as.numeric(df$Value)
-    
-    
-    
-    if(input$collection=="Flow"){
-      maxValue=4000
-      colValue="blue"
-      legendTitle="Flow m3/s"
-    }
-    
+names(dd) <- c("SiteName","Date","Value")
+print(Sys.time() - t)
 
-    
-    if(input$collection=="Rainfall"){
-      maxValue=500
-      colValue="blue"
-      legendTitle="Rainfall"
-    }
-    
- 
-    
-    
-    #Resizing variable to a 0-100 range for plotting and putting this data into
-    # df$StdValue column.
-    df$StdValue<-(100/maxValue)*df$Value
+## ===============================================================================
 
-    # If collection = Flow Distribution, symbol sizes show the scale of 100 - Flow percentile.
-    # This makes low flow symbols small and high flow symbols large.
-    if(input$collection=="FlowDistribution"){
-      df$StdValue <- 100-df$StdValue
-    }
-    
-    
-    #===================================================================================================
-    print(Sys.time()-a)
-    # Define the markers:
-    df.markers <- cbind.data.frame( lat=df$Lat, lon=df$Lon, 
-                                    size=rep('tiny', length(df$Lat)), col=colors()[1:length(df$Lat)], 
-                                    char=rep('',length(df$Lat)) )
-    # Get the bounding box:
-    bb <- qbbox(lat = df[,"Lat"], lon = df[,"Lon"])
-    num.mirrors <- 1:dim(df.markers)[1] ## to visualize only a subset of the cran.mirrors
-    maptype <- c("roadmap", "mobile", "satellite", "terrain", "hybrid", "mapmaker-roadmap", "mapmaker-hybrid")[as.numeric(input$basemap)]
-    
-    # Download the map (either jpg or png): 
-    MyMap <- GetMap.bbox(bb$lonR, bb$latR, destfile = paste("Map_", maptype, ".png", sep=""), GRAYSCALE=F, maptype = maptype)
-    # Plot:
-    
+## ===============================================================================
+## Merging Data For Mapping
+df<-as.data.frame(merge(ds,dd,by=c("SiteName","SiteName")))
+
+#colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
+df$Lat<-as.numeric(df$Lat)
+df$Lon<-as.numeric(df$Lon)
+df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
+df$Value<-as.numeric(df$Value)
+
+#if(input$collection=="Flow"){
+  maxValue=4000
+  colValue="blue"
+  legendTitle="Flow m3/s"
+#}
+
+#if(input$collection=="Rainfall"){
+#  maxValue=500
+#  colValue="blue"
+#  legendTitle="Rainfall"
+#}
+
+#Resizing variable to a 0-100 range for plotting and putting this data into
+# df$StdValue column.
+df$StdValue<-(100/maxValue)*df$Value
+
+# If collection = Flow Distribution, symbol sizes show the scale of 100 - Flow percentile.
+# This makes low flow symbols small and high flow symbols large.
+#if(input$collection=="FlowDistribution"){
+#  df$StdValue <- 100-df$StdValue
+#}
+
+
+#===================================================================================================
+# Define the markers:
+df.markers <- cbind.data.frame( lat=df$Lat, lon=df$Lon, 
+                                size=rep('tiny', length(df$Lat)), col=colors()[1:length(df$Lat)], 
+                                char=rep('',length(df$Lat)) )
+# Get the bounding box:
+bb <- qbbox(lat = df[,"Lat"], lon = df[,"Lon"])
+num.mirrors <- 1:dim(df.markers)[1] ## to visualize only a subset of the cran.mirrors
+maptype <- c("roadmap", "mobile", "satellite", "terrain", "hybrid", "mapmaker-roadmap", "mapmaker-hybrid")[4]
+
+# Download the map (either jpg or png): 
+MyMap <- GetMap.bbox(bb$lonR, bb$latR, destfile = paste("Map_", maptype, ".png", sep=""), GRAYSCALE=F, maptype = maptype)
+# Plot:
+
+
+# Controlling symbol size
+symPower=3/10
+txtPower=0.009
+zeroAdd=0.05
+transp=0
+
+
+
+PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+                cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
+}
+
+showPointLabels <- "Yes"
+if(showPointLabels=="Yes")
+{
+  TextOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+                cex=(df$Value)^txtPower, labels=as.character(round(df$Value,0)), col="white", add=T)
+} else {
+  ## turn legend on if label not chosen
+  legend(x=-310,y=278, c("Low","Medium","High"), title=legendTitle, pch=c(20), cex=1.2,
+         pt.cex=c((5+zeroAdd)^symPower,(50+zeroAdd)^symPower,(95+zeroAdd)^symPower), text.col="white", bty="n", col=colValue, y.intersp=1.2)
   
-    # Controlling symbol size
-    symPower=input$intSymSize/10
-    txtPower=0.009
-    zeroAdd=0.05
-    transp=0
-    
-  
-    if(input$collection=="WaterMatters")
-    {
-    PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
-                      cex=((df$StdValue)+zeroAdd)^symPower, col=rgb(0,0,200,50,maxColorValue=255), pch=16, add=F)
-      
-    } else {
-    PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
-                    cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
-    }
-    if(input$showPointLabels=="Yes")
-    {
-      TextOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
-                    cex=(df$Value)^txtPower, labels=as.character(round(df$Value,0)), col="white", add=T)
-    } else {
-      ## turn legend on if label not chosen
-      legend(x=-310,y=278, c("Low","Medium","High"), title=legendTitle, pch=c(20), cex=1.2,
-             pt.cex=c((5+zeroAdd)^symPower,(50+zeroAdd)^symPower,(95+zeroAdd)^symPower), text.col="white", bty="n", col=colValue, y.intersp=1.2)
-      
-    }
+}
 
-    ## Coloured Rect for Title
-    rect(-320,280,320,320,col="cornflowerblue")
-    
+## Coloured Rect for Title
+rect(-320,280,320,320,col="cornflowerblue")
 
-    ##==========================================    
-    ## Requires pixmap package
-    hrclogo<-read.pnm("hrclogo_small.pnm")
-    addlogo(hrclogo,c(-290,-190),c(-200,-130))
-    ##==========================================    
-    
-    text(0,300,labels=c(input$plotTitle),cex=2.5, col="white")
-    text(0,-300,labels=c("Horizons Regional Council Disclaimer Applies"),cex=0.7)
 
-    print(Sys.time()-a)
-  })
-  
-  # Generate a summary of the data
-  output$summary <- reactivePrint(function() {
-    a<-Sys.time()
-    ## Calculating the endDate of the data to retrieve based on
-    ## selected interval
-    
-    #### TIME CALCULATION ####
-    # FUNCTION CALL 
-    #endTime()
-    
+##==========================================    
+## Requires pixmap package
+hrclogo<-read.pnm("hrclogo_small.pnm")
+addlogo(hrclogo,c(-290,-190),c(-200,-130))
+##==========================================    
 
-    htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
-        
-    print(Sys.time()-a)
-    
-    getData.xml <- xmlInternalTreeParse(htsURL)
-    
-    site.attr<-getNodeSet(getData.xml,"//E[2]/../../@SiteName")
-    site.list<-sapply(site.attr, as.character)
-    
-    data.date <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/../E[1]/T"), xmlValue)
-    data.value <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/I1"), xmlValue)
-    
-    dd<-data.frame(site.list,data.date,data.value, stringsAsFactors=FALSE)
- 
-    ## ===============================================================================
-    
-    ## ===============================================================================
-    ## ===============================================================================
-    ## Merging Data For Mapping
-    df<-as.data.frame(merge(ds,dd,by=c("site.list","site.list")))
-    
-    colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
-    
-    df$Lat<-as.numeric(df$Lat)
-    df$Lon<-as.numeric(df$Lon)
-    df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
-    df$Value<-as.numeric(df$Value)
-    print(htsURL)
-    summary(df[ ,c(1,4,5)])
-  })
-  
-  # Generate an HTML table view of the data
-  output$table <- reactiveTable(function() {
-    a<-Sys.time()
-    ## Calculating the endDate of the data to retrieve based on
-    ## selected interval
-    
-    fromDate<-strptime(input$fromdate,"%Y-%m-%d")
+text(0,300,labels=c("Some random title"),cex=2.5, col="white")
+text(0,-300,labels=c("Horizons Regional Council Disclaimer Applies"),cex=0.7)
 
-    ##
-   
-   if(input$interval=="1 hour") {
-      
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+1
-      addDay <- 0
-      if(hhEnd>24){
-          hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="3 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+3
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="12 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+12
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else if (input$interval=="6 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh+6
-      addDay <- 0
-      if(hhEnd>24){
-        hhEnd <- hhEnd - 24
-	 addDay <- 86400
-      }
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-     } else if (input$interval=="24 hours") {
-      hh <- as.numeric(substr(input$fromhour,1,2))
-      hhEnd<-hh
-      addDay <- 86400
-
-      endTime<-paste(hhEnd,":00:00",sep="")
-      endDate<-fromDate + addDay
-
-      } else {
-      endTime<-input$fromhour
-      ## next line required to do date calculations below
-      d <- as.POSIXlt(fromDate)
-      
-      if(input$interval=="1 day") {
-        
-        d$mday <- d$mday+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="2 days") {
-        
-        d$mday <- d$mday+2
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="3 days") {
-        
-        d$mday <- d$mday+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="4 days") {
-        
-        d$mday <- d$mday+4
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="5 days") {
-        
-        d$mday <- d$mday+5
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if(input$interval=="6 days") {
-        
-        d$mday <- d$mday+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if (input$interval=="1 week") {
-
-        d$mday <- d$mday+7
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="1 month") {
-      
-        d$mon <- d$mon+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }  else if  (input$interval=="3 months") {
-
-        d$mon <- d$mon+3
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="6 months") {
-        
-        d$mon <- d$mon+6
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      } else if  (input$interval=="12 months") {
-        
-        d$year<- d$year+1
-        endDate <- format(as.Date(d),"%d-%b-%Y")
-        
-      }
-    }
-    
-     if(input$collection=="zVirtual Rainfall"){
-	htsName <- "SubcatchmentRain"
-    } else {
-	htsName <- "boo"
-    }
-    htsURL<-paste("http://",HSERVER,".horizons.govt.nz/",htsName,".hts?service=Hilltop&request=GetData&Collection=",input$collection,"&From=",input$fromdate," ",input$fromhour,"&To=",endDate," ",endTime,"&interval=",input$interval,"&Method=",input$method,sep="")
-    
- 
-    print(Sys.time()-a)
-    
-    getData.xml <- xmlInternalTreeParse(htsURL)
-    
-    site.attr<-getNodeSet(getData.xml,"//E[2]/../../@SiteName")
-    site.list<-sapply(site.attr, as.character)
-    
-    data.date <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/../E[1]/T"), xmlValue)
-    data.value <- sapply(getNodeSet(getData.xml, "//Hilltop/Measurement/Data/E[2]/I1"), xmlValue)
-    
-    dd<-data.frame(site.list,data.date,data.value, stringsAsFactors=FALSE)
-    ## ===============================================================================
-    
-    ## ===============================================================================
-    ## ===============================================================================
-    ## Merging Data For Mapping
-    df<-as.data.frame(merge(ds,dd,by=c("site.list","site.list")))
-    
-    colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
-    
-    df$Lat<-as.numeric(df$Lat)
-    df$Lon<-as.numeric(df$Lon)
-    df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
-    df$Value<-as.numeric(df$Value)
-    print(htsURL)
-    data.frame("Site"=df[,1],"Value"=df[,5],"Lat"=df[,2],"Lon"=df[,3])
-  })
-
-})
