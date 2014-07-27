@@ -5,71 +5,66 @@ library(RgoogleMaps)
 library(pixmap)
 
 #===================================================================================================
-## ===============================================================================
-## Getting Site Data
+# INIT Settings
 
-#HSERVER<-"hilltopdev"
+runStatus <- FALSE    ## Pulling site and measurement information takes time.
+                      ## The WFS Scan and site table build only need be run
+                      ## As new councils are added, or on a nightly basis to
+                      ## update the data in the reference table.
+
+# Council SOS domain addresses
 servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
 
-#HSERVER<-c("hilltopserver")
+# Measurements to scan
+measurement <- c("Flow","Rainfall","Water Temperature")
+## ===============================================================================
+## Getting Site Data - THIS SHOULD ONLY BE RUN DAILY IN ITS CURRENT FORM
 
-
-# kludge for all physical sites and virtual rainfall sites is to use the subcatchmentrain.dsn which merges publictelemetry and sucatchment rain hts files
-# 
-#getSites.xml <- xmlInternalTreeParse(paste("http://",HSERVER,".horizons.govt.nz/boo.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""))
-#cat(paste("http://",HSERVER,".horizons.govt.nz/SubcatchmentRain.hts?service=Hilltop&request=SiteList&location=LatLong",sep=""),"\n")
-
-#site.attr<-getNodeSet(getSites.xml,"//Latitude/../@Name")
-#site.list<-sapply(site.attr, as.character)
-#data.lat <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Latitude"), xmlValue)
-#data.lon <- sapply(getNodeSet(getSites.xml, "//HilltopServer/Site/Longitude"), xmlValue)
-
-# For each council server specified...
-# Assumption is that gml:pos has coordinates recorded in lat,lon order
-for(i in 1:length(servers)){
-    getSites.xml <- xmlInternalTreeParse(paste(servers[i],wfs_url[1],sep=""))
+if(runStatus){
+    # For each council server specified...
+    # Assumption is that gml:pos has coordinates recorded in lat,lon order
+    for(i in 1:length(servers)){
+        getSites.xml <- xmlInternalTreeParse(paste(servers[i],wfs_url[1],sep=""))
+        
+        # In WFS, the <Site> element value is the sitename
+        site.list<-sapply(getNodeSet(getSites.xml,"//gml:pos/../../../Site"),xmlValue)
+        
+        # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
+        data.latlon <- sapply(getNodeSet(getSites.xml,"//gml:pos"),xmlValue)
+        latlon <- sapply(strsplit(data.latlon," "),as.numeric)
+        data.lat <- latlon[1,]
+        data.lon <- latlon[2,]
+        
+        if(i==1){
+            ds <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds$source <- servers[i]
+        } else {
+            ds1 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds1$source <- servers[i]
     
-    # In WFS, the <Site> element value is the sitename
-    site.list<-sapply(getNodeSet(getSites.xml,"//gml:pos/../../../Site"),xmlValue)
-    
-    # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
-    data.latlon <- sapply(getNodeSet(getSites.xml,"//gml:pos"),xmlValue)
-    latlon <- sapply(strsplit(data.latlon," "),as.numeric)
-    data.lat <- latlon[1,]
-    data.lon <- latlon[2,]
-    
-    if(i==1){
-        ds <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
-        ds$source <- servers[i]
-    } else {
-        ds1 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
-        ds1$source <- servers[i]
-
-        ds <- rbind(ds,ds1)
+            ds <- rbind(ds,ds1)
+        }
     }
+    rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
+    names(ds) <- c("SiteName","Lat","Lon","source")
 }
-rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
-names(ds) <- c("SiteName","Lat","Lon","source")
-
 
 #------------------------------------------------------------
 # Getting the data to match up with the site list
 # The following requests, through the rcData function, are made using the SOS2.0 service
-# Additionally, the measurement vector below, is passed to the rcData
-
-measurement <- c("Flow","Rainfall","Water Temperature")
 
 #dframe <- rcData(ds,measurement)
-dframe <- ds # only needed for testing
+#dfsites <- ds[,1:4]
+#dfsites <- dfsites[-2,]    # Dropping record with bad map ref
+#save(dfsites,file="dfSitesCouncils.Rdata")
 
-
+load("dfSitesCouncils.Rdata") # only needed for testing
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
 
 ## For each site that has flow data, get the last value ...
-df_flow <- subset(dframe,df$Flow=="OK")
 
 t <- Sys.time()
 for(i in 1:length(df_flow[ ,1])){
@@ -104,7 +99,6 @@ print(Sys.time() - t)
 ## ===============================================================================
 ## Merging Data For Mapping
 df<-as.data.frame(merge(ds,dd,by=c("SiteName","SiteName")))
-df <- df[-38,]  #####  This record contains an invalid map ref
 #colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
 df$Lat<-as.numeric(df$Lat)
 df$Lon<-as.numeric(df$Lon)
