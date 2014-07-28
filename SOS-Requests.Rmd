@@ -20,17 +20,17 @@ For this document, three of the above listed agencies are accessed to demonstrat
 
 
 ##Specification
-The code that this document is built around assumes the following OGC standards are supported by servers at each agency:
+The R code this document is built around assumes the following OGC request and data format standards are supported:
 
-- WFS 1.1.0 to encode location
-- SOS 2.0 requests
-- WaterML 2.0 encoded data responses 
+- WFS 1.1.0 to encode location (requires valid `<gml:pos>` element - no assumption is made about data schema)
+- SOS 2.0 requests (the `GetObservation` request is supported *without* `temporalFilter` argument, currently)
+- WaterML 2.0 encoded data responses (requires valid `<wml2:time>` & `<wml2:value>` elements)
 
-Note: Sites are exluded where location coordinates are not available or coordinates do not fall within NZ
-
-
+Some error checking is undertaken. Sites are exluded where location coordinates are not available or coordinates do not fall within NZ. Where an exception report is raised for a SOS 2.0 request, this is handled gracefully.
 
 
+
+##Demonstrated federated data access
 
 ```{r echo=FALSE}
 
