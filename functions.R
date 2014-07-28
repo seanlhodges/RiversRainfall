@@ -181,7 +181,7 @@ endDate <- function(interval,fromdate,fromhour){
 ## just too slow.
 #####################################################################################
 
-rcData <- function(ds,measurements)
+rcData <- function(ds,measurements){
     
     for(m in 1:length(measurement)){
       for(i in 1:length(ds[,1])){

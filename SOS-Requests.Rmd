@@ -105,8 +105,16 @@ if(runStatus){
 ```
 
 ###Building dataframes with data
+There is a step missing here that implements the GetDataAvailability hack. The next chunk of code will not work without it. I will resolve this tonight.
+
 
 ```{r GetData}
+
+source("functions.R")
+ds <- rcData(ds,measurements)
+# Just select sites that have  flow data
+df_flow <- subset(ds,Flow == "OK")
+
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
@@ -146,4 +154,77 @@ names(dd) <- c("SiteName","Date","Value")
 ```
 
 
+###Make a map
 
+
+```{r MakeAMap}
+## ===============================================================================
+## Merging Data For Mapping
+df<-as.data.frame(merge(ds,dd,by=c("SiteName","SiteName")))
+#colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
+df$Lat<-as.numeric(df$Lat)
+df$Lon<-as.numeric(df$Lon)
+df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
+df$Value<-as.numeric(df$Value)
+
+# Just for flow so far
+maxValue=4000
+colValue="blue"
+legendTitle="Flow m3/s"
+
+#Resizing variable to a 0-100 range for plotting and putting this data into
+# df$StdValue column.
+df$StdValue<-(100/maxValue)*df$Value
+
+#===================================================================================================
+# Define the markers:
+df.markers <- cbind.data.frame( lat=df$Lat, lon=df$Lon, 
+                                size=rep('tiny', length(df$Lat)), col=colors()[1:length(df$Lat)], 
+                                char=rep('',length(df$Lat)) )
+# Get the bounding box:
+bb <- qbbox(lat = df[,"Lat"], lon = df[,"Lon"])
+num.mirrors <- 1:dim(df.markers)[1] ## to visualize only a subset of the cran.mirrors
+maptype <- c("roadmap", "mobile", "satellite", "terrain", "hybrid", "mapmaker-roadmap", "mapmaker-hybrid")[4]
+
+# Download the map (either jpg or png): 
+MyMap <- GetMap.bbox(bb$lonR, bb$latR, destfile = paste("Map_", maptype, ".png", sep=""), GRAYSCALE=F, maptype = maptype)
+# Plot:
+
+
+# Controlling symbol size
+symPower=2/10
+txtPower=0.009
+zeroAdd=0.05
+transp=0
+
+
+
+PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+                cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
+}
+
+showPointLabels <- "No"
+#if(showPointLabels=="Yes")
+#{
+#  TextOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+#                cex=(df$Value)^txtPower, labels=as.character(round(df$Value,0)), col="white", add=T)
+#} else {
+#  ## turn legend on if label not chosen
+#  legend(x=-310,y=278, c("Low","Medium","High"), title=legendTitle, pch=c(20), cex=1.2,
+#         pt.cex=c((5+zeroAdd)^symPower,(50+zeroAdd)^symPower,(95+zeroAdd)^symPower), text.col="white", bty="n", col=colValue, y.intersp=1.2)
+#  
+#}
+
+## Coloured Rect for Title
+rect(-320,280,320,320,col="cornflowerblue")
+
+
+##==========================================    
+## Requires pixmap package
+hrclogo<-read.pnm("hrclogo_small.pnm")
+addlogo(hrclogo,c(-290,-190),c(-200,-130))
+##==========================================    
+
+text(0,300,labels=c("Some random title"),cex=2.5, col="white")
+text(0,-300,labels=c("Horizons Regional Council Disclaimer Applies"),cex=0.7)
+```
