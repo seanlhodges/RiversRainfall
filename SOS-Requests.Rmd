@@ -53,7 +53,7 @@ library(pixmap)
 
 #===================================================================================================
 # INIT Settings
-
+USE_CACHE <- TRUE
 runStatus <- TRUE    ## Pulling site and measurement information takes time.
                       ## The WFS Scan and site table build only need be run
                       ## As new councils are added, or on a nightly basis to
@@ -104,6 +104,8 @@ if(runStatus){
     head(ds)
 }
 
+# Remove site with strange latlon values
+ds <- ds[-2,]
 ```
 
 **GetDataAvailability**
@@ -115,12 +117,16 @@ The example below could be modified to return valid date ranges for the `observe
 ```{r GetData}
 source("SOS_Ref.R")
 # Measurements to scan
-measurements <- c("Flow","Rainfall") #,"Water Temperature")
+measurements <- c("Flow","Rainfall","Water Temperature")
 
 ## GetDataAvailability for each measurement
-dsm <- rcData(ds,measurements)
-save(dsm,file="dsmMeasurements.Rdata")
-
+if(!USE_CACHE){
+    dsm <- rcData(ds,measurements)
+    save(dsm,file="dsmMeasurements.Rdata")
+} else {
+    #use cached data
+    load("dsmMeasurements.Rdata")
+}
 # Just select sites that have  flow data
 ds_flow <- subset(dsm,ds$Flow == "OK")
 ds_rain <- subset(dsm,ds$Rainfall == "OK")
@@ -129,7 +135,7 @@ ds_rain <- subset(dsm,ds$Rainfall == "OK")
 ## Getting Measurement Data for Mapping.
 ## For each site that has measurement data, get the last value ...
 df_flow <- rcLastTVP(ds_flow,"Flow")
-df_rain <- rcLastTVP(ds_rain,"Rainfall")
+#df_rain <- rcLastTVP(ds_rain,"Rainfall")
 
 ```
 
