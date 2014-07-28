@@ -1,0 +1,105 @@
+---
+title: "Using SOS to access time-series data"
+author: "Sean Hodges"
+date: "Monday, July 28, 2014"
+output:
+  html_document:
+    keep_md: yes
+---
+
+##Introduction
+Accessing data across organisations has traditionally required the physical transfer of data from one organisation to another. In the geospatial world, standard publishing mechanisms exist that allow data to be shared as 'Services' (a URL call), that can be interpretted and loaded as a layer into many different GIS Desktop tools. Recently, time-series data has been able to adopt this approach to data sharing, conceivably allowing a single point of publishing to many different users and desktop tools. In a national context, 16 Regional / Unitary Authorities publishing water data this way potentially allows for aggregation of data **across** organisation boundaries. Should this eventuate, it will deliver a paradigm shift in water data delivery and consumption by everyone with an interest in water (allocation, availability, quality, life-sustaining capacity, etc).
+
+To show a functioning federated time-series system across New Zealand for *water* data, the first step is to have more than one agency publishing data externally using agreed request and response encoding standards.
+
+For the NZ situation, there are currently seven agencies that have the systems in place - Northland Rc, Waikato RC, Horizons RC, Marlborough DC, ECan, Environment Southland & NIWA.
+
+For this document, three of those agencies are accessed to demonstrate how a cross-agency data summary might be constructed. The approach taken is to aggregate sites across selected agencies and determine whether a given measurement has any data available (the equivalent of a GetDataAvailability call, but without date range).
+
+
+##Specification
+The code that this document is built around assumes the following OGC standards are supported by servers at each agency:
+
+- WFS 1.1.0 to encode location
+- SOS 2.0 requests
+- WaterML 2.0 encoded data responses 
+
+Note: Sites are exluded where location coordinates are not available or coordinates do not fall within NZ
+
+
+
+
+
+```{r echo=FALSE}
+
+library(XML)
+library(sp)
+library(RgoogleMaps)
+library(pixmap)
+
+```
+
+
+
+
+```{r echo=FALSE}
+
+#===================================================================================================
+# INIT Settings
+
+runStatus <- FALSE    ## Pulling site and measurement information takes time.
+                      ## The WFS Scan and site table build only need be run
+                      ## As new councils are added, or on a nightly basis to
+                      ## update the data in the reference table.
+
+# Council SOS domain addresses
+servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
+wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
+
+# Measurements to scan
+measurement <- c("Flow","Rainfall","Water Temperature")
+## ===============================================================================
+## Getting Site Data - THIS SHOULD ONLY BE RUN DAILY IN ITS CURRENT FORM
+
+if(runStatus){
+    # For each council server specified...
+    # Assumption is that gml:pos has coordinates recorded in lat,lon order
+    for(i in 1:length(servers)){
+        getSites.xml <- xmlInternalTreeParse(paste(servers[i],wfs_url[1],sep=""))
+        
+        # In WFS, the <Site> element value is the sitename
+        site.list<-sapply(getNodeSet(getSites.xml,"//gml:pos/../../../Site"),xmlValue)
+        
+        # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
+        data.latlon <- sapply(getNodeSet(getSites.xml,"//gml:pos"),xmlValue)
+        latlon <- sapply(strsplit(data.latlon," "),as.numeric)
+        data.lat <- latlon[1,]
+        data.lon <- latlon[2,]
+        
+        if(i==1){
+            ds <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds$source <- servers[i]
+        } else {
+            ds1 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds1$source <- servers[i]
+    
+            ds <- rbind(ds,ds1)
+        }
+    }
+    rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
+    names(ds) <- c("SiteName","Lat","Lon","source")
+}
+
+
+
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+load("dfSitesCouncils.Rdata")
+ds <- dfsites
+head(ds)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunks to prevent printing of the R code.
