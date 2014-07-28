@@ -148,7 +148,7 @@ df_flow <- rcLastTVP(ds_flow,"Flow")
 ```{r MakeAMap}
 ## ===============================================================================
 ## Merging Data For Mapping
-df<-as.data.frame(merge(ds,dd,by=c("SiteName","SiteName")))
+df<-as.data.frame(merge(ds,df_flow,by=c("SiteName","SiteName")))
 #colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
 df$Lat<-as.numeric(df$Lat)
 df$Lon<-as.numeric(df$Lon)
