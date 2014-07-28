@@ -97,6 +97,8 @@ if(runStatus){
     names(ds) <- c("SiteName","Lat","Lon","lastrun","source")
     # removing resource consent flow monitoring sites
     ds <- subset(ds,substr(ds$SiteName,1,3) !="RC_")
+    # Remove site with strange latlon values
+    ds <- ds[-2,]
     
 } else {  ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
@@ -104,8 +106,6 @@ if(runStatus){
     head(ds)
 }
 
-# Remove site with strange latlon values
-ds <- ds[-2,]
 ```
 
 **GetDataAvailability**
@@ -130,8 +130,8 @@ if(USE_CACHE){
     
 }
 # Just select sites that have  flow data
-ds_flow <- subset(dsm,ds$Flow == "OK")
-ds_rain <- subset(dsm,ds$Rainfall == "OK")
+ds_flow <- subset(dsm,dsm$Flow == "OK")
+ds_rain <- subset(dsm,dsm$Rainfall == "OK")
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
@@ -145,14 +145,15 @@ df_flow <- rcLastTVP(ds_flow,"Flow")
 ###Make a map
 
 
-```{r MakeAMap}
+```{r MakeAMap,echo=FALSE,fig.height=7}
 ## ===============================================================================
 ## Merging Data For Mapping
+df_flow <- df_flow[-2,]
 df<-as.data.frame(merge(ds,df_flow,by=c("SiteName","SiteName")))
 #colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
-df$Lat<-as.numeric(df$Lat)
-df$Lon<-as.numeric(df$Lon)
-df$Date<-strptime(df$Date,"%Y-%m-%dT%H:%M:%S")
+df$Lat<-as.numeric(df$Lat.x)
+df$Lon<-as.numeric(df$Lon.x)
+df$DateTime<-strptime(df$DateTime,"%Y-%m-%dT%H:%M:%S")
 df$Value<-as.numeric(df$Value)
 
 # Just for flow so far
@@ -209,10 +210,10 @@ rect(-320,280,320,320,col="cornflowerblue")
 
 ##==========================================    
 ## Requires pixmap package
-hrclogo<-read.pnm("hrclogo_small.pnm")
-addlogo(hrclogo,c(-290,-190),c(-200,-130))
+#hrclogo<-read.pnm("hrclogo_small.pnm")
+#addlogo(hrclogo,c(-290,-190),c(-200,-130))
 ##==========================================    
 
-text(0,300,labels=c("Some random title"),cex=2.5, col="white")
+text(0,300,labels=c("Flow stations"),cex=2.5, col="white")
 text(0,-300,labels=c("Horizons Regional Council Disclaimer Applies"),cex=0.7)
 ```

@@ -67,52 +67,42 @@ rcData <- function(ds,measurements){
 #####################################################################################
 
 rcLastTVP <- function(df,measurement){
-    for(m in 1:length(measurement)){
-        for(i in 1:length(ds[,1])){
+    for(i in 1:length(df[,1])){
             
-            SOS_url <- paste(ds$source[i],"data.hts?service=SOS",
-                             "&request=GetObservation",
-                             "&featureOfInterest=",ds$SiteName[i],
-                             "&observedProperty=",measurement[m],
-                             sep="")
-            #cat(SOS_url,"\n")
-            
-            err.attr<-""
-            err.list <- c("OK")
-            
-            result = tryCatch({
-                getData.xml <- xmlInternalTreeParse(SOS_url)
-            }, warning = function(w) {
-                
-            }, error = function(e) {
-                err.list <- c("NoData")
-            }, finally = {
-                
-            })
-            getData.xml <- xmlInternalTreeParse(SOS_url)
-            xmltop <- xmlRoot(getData.xml)
-            
-            if(xmlName(xmltop)=="ExceptionReport"){
-                err.attr<-getNodeSet(getData.xml,"//ows:Exception/@exceptionCode")
-                err.list<-sapply(err.attr, as.character)
-            }
-            
-            if(i==1){
-                a <- c(err.list)
-            } else {
-                b <- c(err.list)
-                a <- c(a,b)
-            }
-            
-            rm(err.attr,err.list)
+        SOS_url <- paste(df$source[i],"data.hts?service=SOS",
+                         "&request=GetObservation",
+                         "&featureOfInterest=",df$SiteName[i],
+                         "&observedProperty=",measurement,
+                         sep="")
+        #cat(SOS_url,"\n")
+        
+        getData.xml <- xmlInternalTreeParse(SOS_url)
+        xmltop <- xmlRoot(getData.xml)
+        
+        if(xmlName(xmltop)!="ExceptionReport"){
+            wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)
+            wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)
         }
         
+        if(i==1){
+            wml2Time <- c(wml2time)
+            wml2Value <- c(wml2value) 
+        } else {
+            wml2Time1 <- c(wml2time)
+            wml2Value1 <- c(wml2value) 
+            
+            wml2Time <- c(wml2Time,wml2Time1)
+            wml2Value <- c(wml2Value,wml2Value1) 
+        }
         
-        #Append each measurements output vector to the data.frame as a new column
-        ds[,length(ds)+1] <- a  ### Add flag for sites that record requested measurement
-        colnames(ds)[length(ds)] <-  measurement[m]
-        #ds <- ds[,1:6]
     }
+        
+
+    #Append each measurements output vector to the data.frame as a new column
+    df[,length(df)+1] <- wml2Time  ### Add wml2Time
+    colnames(df)[length(df)] <-  c("DateTime")
+    df[,length(df)+1] <- wml2Value  ### Add wml2Value
+    colnames(df)[length(df)] <-  c("Value")
     
-    return(ds)
+    return(df)
 }
