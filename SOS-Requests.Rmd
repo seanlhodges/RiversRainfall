@@ -61,7 +61,7 @@ runStatus <- FALSE    ## Pulling site and measurement information takes time.
 # Council SOS domain addresses
 # These addresses are currently the property of their respective councils. Please request permission 
 # from respective Hydrology teams to use the data from their servers
-servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
+servers <- c("http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
 
 # Measurements to scan

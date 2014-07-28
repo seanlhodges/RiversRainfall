@@ -13,7 +13,7 @@ runStatus <- FALSE    ## Pulling site and measurement information takes time.
                       ## update the data in the reference table.
 
 # Council SOS domain addresses
-servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
+servers <- c("http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
 
 # Measurements to scan
