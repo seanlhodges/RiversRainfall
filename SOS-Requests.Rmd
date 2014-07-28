@@ -31,8 +31,11 @@ Some error checking is undertaken. Sites are exluded where location coordinates 
 
 
 ##Demonstrated federated data access
+The R script below sets up data access to each Council and pulls time-series data via SOS-based requests.
 
-```{r echo=FALSE}
+###Loading libraries
+
+```{r loadLibraries}
 
 library(XML)
 library(sp)
@@ -43,8 +46,9 @@ library(pixmap)
 
 
 
+###Build a site table
 
-```{r echo=FALSE}
+```{r GetSites}
 
 #===================================================================================================
 # INIT Settings
@@ -55,6 +59,8 @@ runStatus <- FALSE    ## Pulling site and measurement information takes time.
                       ## update the data in the reference table.
 
 # Council SOS domain addresses
+# These addresses are currently the property of their respective councils. Please request permission 
+# from respective Hydrology teams to use the data from their servers
 servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
 
@@ -90,18 +96,54 @@ if(runStatus){
     }
     rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
     names(ds) <- c("SiteName","Lat","Lon","source")
+} else {  ## Load the one prepared earlier
+    load("dfSitesCouncils.Rdata")
+    ds <- dfsites
+    head(ds)
 }
 
+```
 
+###Building dataframes with data
+
+```{r GetData}
+
+## ===============================================================================
+## Getting Measurement Data for Mapping.
+
+## For each site that has measurement data, get the last value ...
+
+for(i in 1:length(df_flow[ ,1])){
+
+    SOS_url <- paste(df_flow$source[i],"data.hts?service=SOS",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df_flow$SiteName[i],
+                     "&observedProperty=Flow",
+                     sep="")
+
+    getData.xml <- xmlInternalTreeParse(SOS_url)
+    xmltop <- xmlRoot(getData.xml)
+    
+    # Handle the exceptions with the SOS call has no data to return
+    if(xmlName(xmltop)!="ExceptionReport"){
+        # Where there is no error, GetData
+        data.date <- sapply(getNodeSet(getData.xml, "//wml2:time"),xmlValue)
+        data.value <- sapply(getNodeSet(getData.xml, "//wml2:value"),xmlValue)
+      
+        if(i==1){
+            dd<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
+        } else {
+            dd1<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
+            dd <- rbind(dd,dd1)
+        }
+    }
+}
+
+names(dd) <- c("SiteName","Date","Value")
+
+## ===============================================================================
 
 ```
 
-You can also embed plots, for example:
 
-```{r, echo=FALSE}
-load("dfSitesCouncils.Rdata")
-ds <- dfsites
-head(ds)
-```
 
-Note that the `echo = FALSE` parameter was added to the code chunks to prevent printing of the R code.
