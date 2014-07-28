@@ -46,14 +46,15 @@ library(pixmap)
 
 
 
-###Build a site table
+###Build reference data
+**Site table**
 
 ```{r GetSites}
 
 #===================================================================================================
 # INIT Settings
 
-runStatus <- FALSE    ## Pulling site and measurement information takes time.
+runStatus <- TRUE    ## Pulling site and measurement information takes time.
                       ## The WFS Scan and site table build only need be run
                       ## As new councils are added, or on a nightly basis to
                       ## update the data in the reference table.
@@ -61,11 +62,9 @@ runStatus <- FALSE    ## Pulling site and measurement information takes time.
 # Council SOS domain addresses
 # These addresses are currently the property of their respective councils. Please request permission 
 # from respective Hydrology teams to use the data from their servers
-servers <- c("http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
+servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
 wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
 
-# Measurements to scan
-measurement <- c("Flow","Rainfall","Water Temperature")
 ## ===============================================================================
 ## Getting Site Data - THIS SHOULD ONLY BE RUN DAILY IN ITS CURRENT FORM
 
@@ -85,17 +84,20 @@ if(runStatus){
         data.lon <- latlon[2,]
         
         if(i==1){
-            ds <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds$source <- servers[i]
         } else {
-            ds1 <-data.frame(site.list,data.lat,data.lon, stringsAsFactors=FALSE)
+            ds1 <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds1$source <- servers[i]
     
             ds <- rbind(ds,ds1)
         }
     }
     rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
-    names(ds) <- c("SiteName","Lat","Lon","source")
+    names(ds) <- c("SiteName","Lat","Lon","lastrun","source")
+    # removing resource consent flow monitoring sites
+    ds <- subset(ds,substr(ds$SiteName,1,3) !="RC_")
+    
 } else {  ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
     ds <- dfsites
@@ -104,52 +106,30 @@ if(runStatus){
 
 ```
 
-###Building dataframes with data
-There is a step missing here that implements the GetDataAvailability hack. The next chunk of code will not work without it. I will resolve this tonight.
+**GetDataAvailability**
+With a valid list of sites, the next step is to establish what data is available. A `GetDataAvailability` call against a SOS server would be convenient. However, for those servers not currently supporting this call, a slightly longer process is required to *discover* what is avialable. The only pre-condition is that the names of the `observedProperty` can be determined by other means beforehand. For this purposes of this example, the following `observedProperty` values have been chosen: Flow, Rainfall, Water Temperature.
+
+The example below could be modified to return valid date ranges for the `observedProperty`'s in question if necessary.
 
 
 ```{r GetData}
+source("SOS_Ref.R")
+# Measurements to scan
+measurements <- c("Flow","Rainfall") #,"Water Temperature")
 
-source("functions.R")
-ds <- rcData(ds,measurements)
+## GetDataAvailability for each measurement
+dsm <- rcData(ds,measurements)
+save(dsm,file="dsmMeasurements.Rdata")
+
 # Just select sites that have  flow data
-df_flow <- subset(ds,Flow == "OK")
-
+ds_flow <- subset(dsm,ds$Flow == "OK")
+ds_rain <- subset(dsm,ds$Rainfall == "OK")
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
-
 ## For each site that has measurement data, get the last value ...
-
-for(i in 1:length(df_flow[ ,1])){
-
-    SOS_url <- paste(df_flow$source[i],"data.hts?service=SOS",
-                     "&request=GetObservation",
-                     "&featureOfInterest=",df_flow$SiteName[i],
-                     "&observedProperty=Flow",
-                     sep="")
-
-    getData.xml <- xmlInternalTreeParse(SOS_url)
-    xmltop <- xmlRoot(getData.xml)
-    
-    # Handle the exceptions with the SOS call has no data to return
-    if(xmlName(xmltop)!="ExceptionReport"){
-        # Where there is no error, GetData
-        data.date <- sapply(getNodeSet(getData.xml, "//wml2:time"),xmlValue)
-        data.value <- sapply(getNodeSet(getData.xml, "//wml2:value"),xmlValue)
-      
-        if(i==1){
-            dd<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
-        } else {
-            dd1<-data.frame(df_flow$SiteName[i],data.date,data.value, stringsAsFactors=FALSE)
-            dd <- rbind(dd,dd1)
-        }
-    }
-}
-
-names(dd) <- c("SiteName","Date","Value")
-
-## ===============================================================================
+df_flow <- rcLastTVP(ds_flow,"Flow")
+df_rain <- rcLastTVP(ds_rain,"Rainfall")
 
 ```
 
