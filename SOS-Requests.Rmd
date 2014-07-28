@@ -120,12 +120,14 @@ source("SOS_Ref.R")
 measurements <- c("Flow","Rainfall","Water Temperature")
 
 ## GetDataAvailability for each measurement
-if(!USE_CACHE){
-    dsm <- rcData(ds,measurements)
-    save(dsm,file="dsmMeasurements.Rdata")
-} else {
-    #use cached data
+if(USE_CACHE){
+    cat("Loading cached data ...\n")
     load("dsmMeasurements.Rdata")
+    
+} else {
+#    dsm <- rcData(ds,measurements)
+#    save(dsm,file="dsmMeasurements.Rdata")
+    
 }
 # Just select sites that have  flow data
 ds_flow <- subset(dsm,ds$Flow == "OK")
@@ -187,7 +189,7 @@ transp=0
 
 PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
                 cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
-}
+
 
 showPointLabels <- "No"
 #if(showPointLabels=="Yes")
