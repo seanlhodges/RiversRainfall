@@ -75,7 +75,7 @@ rcLastTVP <- function(df,measurement){
                              "&featureOfInterest=",ds$SiteName[i],
                              "&observedProperty=",measurement[m],
                              sep="")
-            cat(SOS_url,"\n")
+            #cat(SOS_url,"\n")
             
             err.attr<-""
             err.list <- c("OK")
