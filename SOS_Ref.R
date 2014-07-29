@@ -17,24 +17,33 @@
 
 rcData <- function(ds,measurements){
   
-  for(m in 1:length(measurement)){
+  for(m in 1:length(measurements)){
     for(i in 1:length(ds[,1])){
       
-      SOS_url <- paste(ds$source[i],"data.hts?service=SOS",
+      SOS_url <- paste(ds$source[i],"service=SOS",
                        "&request=GetObservation",
                        "&featureOfInterest=",ds$SiteName[i],
-                       "&observedProperty=",measurement[m],
+                       "&observedProperty=",measurements[m],
                        sep="")
       #cat(SOS_url,"\n")
-      
+      err.attr <- c("")
       err.list <- c("OK")
-      getData.xml <- xmlInternalTreeParse(SOS_url)
-      xmltop <- xmlRoot(getData.xml)
+      result = tryCatch({
+        getData.xml <- xmlInternalTreeParse(SOS_url)
+        }, warning = function(w) {
+          
+        }, error = function(e) {
+          err.list <- c("NoData")
+        }, finally = {
+         xmltop <- xmlRoot(getData.xml)
+         
+        if(xmlName(xmltop)=="ExceptionReport"){
+             err.attr<-getNodeSet(getData.xml,"//ows:Exception/@exceptionCode")
+             err.list<-sapply(err.attr, as.character)
+        }
+         
+      })
       
-      if(xmlName(xmltop)=="ExceptionReport"){
-        err.attr<-getNodeSet(getData.xml,"//ows:Exception/@exceptionCode")
-        err.list<-sapply(err.attr, as.character)
-      }
       
       if(i==1){
         a <- c(err.list)
@@ -49,7 +58,7 @@ rcData <- function(ds,measurements){
     
     #Append each measurements output vector to the data.frame as a new column
     ds[,length(ds)+1] <- a  ### Add flag for sites that record requested measurement
-    colnames(ds)[length(ds)] <-  measurement[m]
+    colnames(ds)[length(ds)] <-  measurements[m]
     #ds <- ds[,1:6]
   }
   
@@ -69,7 +78,7 @@ rcData <- function(ds,measurements){
 rcLastTVP <- function(df,measurement){
     for(i in 1:length(df[,1])){
             
-        SOS_url <- paste(df$source[i],"data.hts?service=SOS",
+        SOS_url <- paste(df$source[i],"service=SOS",
                          "&request=GetObservation",
                          "&featureOfInterest=",df$SiteName[i],
                          "&observedProperty=",measurement,
@@ -105,4 +114,56 @@ rcLastTVP <- function(df,measurement){
     colnames(df)[length(df)] <-  c("Value")
     
     return(df)
+}
+
+
+
+##### FOR FUN
+## Make a Map
+
+MakeMap <- function(df){
+    
+
+    maxValue=4000
+    colValue="blue"
+    legendTitle="Flow m3/s"
+    
+    #Resizing variable to a 0-100 range for plotting and putting this data into
+    # df$StdValue column.
+    df$StdValue<-(100/maxValue)*100
+    
+    
+    
+    #===================================================================================================
+    # Define the markers:
+    df.markers <- cbind.data.frame( lat=df$Lat, lon=df$Lon, 
+                                    size=rep('tiny', length(df$Lat)), col=colors()[1:length(df$Lat)], 
+                                    char=rep('',length(df$Lat)) )
+    # Get the bounding box:
+    bb <- qbbox(lat = df[,"Lat"], lon = df[,"Lon"])
+    num.mirrors <- 1:dim(df.markers)[1] ## to visualize only a subset of the cran.mirrors
+    maptype <- c("roadmap", "mobile", "satellite", "terrain", "hybrid", "mapmaker-roadmap", "mapmaker-hybrid")[4]
+    
+    # Download the map (either jpg or png): 
+    MyMap <- GetMap.bbox(bb$lonR, bb$latR, destfile = paste("Map_", maptype, ".png", sep=""), GRAYSCALE=F, maptype = maptype)
+    # Plot:
+    
+    
+    # Controlling symbol size
+    symPower=2/10
+    txtPower=0.009
+    zeroAdd=0.05
+    transp=0
+    
+    
+    
+    PlotOnStaticMap(MyMap,lat = df.markers[num.mirrors,"lat"], lon = df.markers[num.mirrors,"lon"], 
+                    cex=((df$StdValue)+zeroAdd)^symPower, pch=19, col=colValue, add=F)
+    
+    
+    ## Coloured Rect for Title
+    rect(-320,280,320,320,col="cornflowerblue")
+    
+    text(0,300,labels=c("Stations"),cex=2.5, col="white")
+    
 }
