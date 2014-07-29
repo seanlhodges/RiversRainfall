@@ -47,7 +47,7 @@ library(pixmap)
 ```r
 #===================================================================================================
 # INIT Settings
-USE_CACHE <- TRUE
+USE_CACHE <- FALSE #TRUE
 runStatus <- TRUE    ## Pulling site and measurement information takes time.
                       ## The WFS Scan and site table build only need be run
                       ## As new councils are added, or on a nightly basis to
@@ -56,8 +56,14 @@ runStatus <- TRUE    ## Pulling site and measurement information takes time.
 # Council SOS domain addresses
 # These addresses are currently the property of their respective councils. Please request permission 
 # from respective Hydrology teams to use the data from their servers
-servers <- c("http://hilltop.nrc.govt.nz/","http://hilltopserver.horizons.govt.nz/","http://hydro.marlborough.govt.nz/")
-wfs_url <- c("data.hts?service=WFS&request=GetFeature&typename=SiteList")
+servers <- c("http://hilltop.nrc.govt.nz/data.hts?",
+             "http://hilltopserver.horizons.govt.nz/data.hts?",
+             "http://hydro.marlborough.govt.nz/data.hts?",
+             "http://odp.es.govt.nz/data.hts?")
+wfs_url <- c("service=WFS&request=GetFeature&typename=SiteList")
+
+KiWIS_servers <- c("http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?")
+KiWIS_wfs_url <- c("datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.1.0")
 
 ## ===============================================================================
 ## Getting Site Data - THIS SHOULD ONLY BE RUN DAILY IN ITS CURRENT FORM
@@ -93,6 +99,7 @@ if(runStatus){
     ds <- subset(ds,substr(ds$SiteName,1,3) !="RC_")
     # Remove site with strange latlon values
     ds <- ds[-2,]
+    save(ds,file="dfSitesCouncils.Rdata")
     
 } else {  ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
@@ -111,7 +118,7 @@ The example below could be modified to return valid date ranges for the `observe
 ```r
 source("SOS_Ref.R")
 # Measurements to scan
-measurements <- c("Flow","Rainfall","Water Temperature")
+measurements <- c("Flow","Rainfall")
 
 ## GetDataAvailability for each measurement
 if(USE_CACHE){
@@ -119,14 +126,21 @@ if(USE_CACHE){
     load("dsmMeasurements.Rdata")
     
 } else {
-#    dsm <- rcData(ds,measurements)
-#    save(dsm,file="dsmMeasurements.Rdata")
+    dsm <- rcData(ds,measurements)
+    save(dsm,file="dsmMeasurements.Rdata")
     
 }
 ```
 
 ```
-## Loading cached data ...
+## failed to load HTTP resource
+## Document is empty
+## Start tag expected, '<' not found
+## Document is empty
+## Start tag expected, '<' not found
+## Document is empty
+## Start tag expected, '<' not found
+## Start tag expected, '<' not found
 ```
 
 ```r
