@@ -47,7 +47,9 @@ library(pixmap)
 ```r
 #===================================================================================================
 # INIT Settings
-USE_CACHE <- FALSE #TRUE
+source("SOS_Ref.R")
+
+USE_CACHE <- TRUE #TRUE
 runStatus <- TRUE    ## Pulling site and measurement information takes time.
                       ## The WFS Scan and site table build only need be run
                       ## As new councils are added, or on a nightly basis to
@@ -57,31 +59,59 @@ runStatus <- TRUE    ## Pulling site and measurement information takes time.
 # These addresses are currently the property of their respective councils. Please request permission 
 # from respective Hydrology teams to use the data from their servers
 servers <- c("http://hilltop.nrc.govt.nz/data.hts?",
+             "http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&",
              "http://hilltopserver.horizons.govt.nz/data.hts?",
              "http://hydro.marlborough.govt.nz/data.hts?",
              "http://odp.es.govt.nz/data.hts?")
-wfs_url <- c("service=WFS&request=GetFeature&typename=SiteList")
-
-KiWIS_servers <- c("http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?")
-KiWIS_wfs_url <- c("datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.1.0")
 
 ## ===============================================================================
 ## Getting Site Data - THIS SHOULD ONLY BE RUN DAILY IN ITS CURRENT FORM
+## KiWIS Servers and Hilltop Servers take slighty different approaches
+## to serving WFS.
 
-if(runStatus){
+## KISTERS
+## http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.1.0
+
+## HILLTOP
+## http://hilltopserver.horizons.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList
+
+## For simplicities sake, unique WFS calls will be defined for each agency
+wfs <- c("http://hilltop.nrc.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
+         "http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.0.0",
+         "http://hilltopserver.horizons.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
+         "http://hydro.marlborough.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
+         "http://odp.es.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList")
+
+wfs_site_element <- c("Site","KiWIS:station_no","Site","Site","Site")
+
+
+if(USE_CACHE){
+    ## Load the one prepared earlier
+    load("dfSitesCouncils.Rdata")
+    ds <- dfsites
+    
+} else{
     # For each council server specified...
     # Assumption is that gml:pos has coordinates recorded in lat,lon order
-    for(i in 1:length(servers)){
-        getSites.xml <- xmlInternalTreeParse(paste(servers[i],wfs_url[1],sep=""))
+    for(i in 1:length(wfs)){
+        getSites.xml <- xmlInternalTreeParse(wfs[i])
         
         # In WFS, the <Site> element value is the sitename
-        site.list<-sapply(getNodeSet(getSites.xml,"//gml:pos/../../../Site"),xmlValue)
+        site.list<-sapply(getNodeSet(getSites.xml,paste("//gml:pos/../../../",wfs_site_element[i],sep="")),xmlValue)
         
         # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
         data.latlon <- sapply(getNodeSet(getSites.xml,"//gml:pos"),xmlValue)
         latlon <- sapply(strsplit(data.latlon," "),as.numeric)
-        data.lat <- latlon[1,]
-        data.lon <- latlon[2,]
+        
+        ## Lats and Longs are stored in a different order for waikatoregion service
+        ## Reverse association for this Waikato
+        if(i!=2){
+            data.lat <- latlon[1,]
+            data.lon <- latlon[2,]
+        } else {
+            data.lat <- latlon[2,]
+            data.lon <- latlon[1,]
+        }
         
         if(i==1){
             ds <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
@@ -101,12 +131,12 @@ if(runStatus){
     ds <- ds[-2,]
     save(ds,file="dfSitesCouncils.Rdata")
     
-} else {  ## Load the one prepared earlier
-    load("dfSitesCouncils.Rdata")
-    ds <- dfsites
-    head(ds)
-}
+} 
+
+MakeMap(ds)
 ```
+
+![plot of chunk GetSites](./SOS-Requests_files/figure-html/GetSites.png) 
 
 **GetDataAvailability**
 With a valid list of sites, the next step is to establish what data is available. A `GetDataAvailability` call against a SOS server would be convenient. However, for those servers not currently supporting this call, a slightly longer process is required to *discover* what is avialable. The only pre-condition is that the names of the `observedProperty` can be determined by other means beforehand. For this purposes of this example, the following `observedProperty` values have been chosen: Flow, Rainfall, Water Temperature.
@@ -116,7 +146,6 @@ The example below could be modified to return valid date ranges for the `observe
 
 
 ```r
-source("SOS_Ref.R")
 # Measurements to scan
 measurements <- c("Flow","Rainfall")
 
@@ -133,14 +162,7 @@ if(USE_CACHE){
 ```
 
 ```
-## failed to load HTTP resource
-## Document is empty
-## Start tag expected, '<' not found
-## Document is empty
-## Start tag expected, '<' not found
-## Document is empty
-## Start tag expected, '<' not found
-## Start tag expected, '<' not found
+## Loading cached data ...
 ```
 
 ```r
