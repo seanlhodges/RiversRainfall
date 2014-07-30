@@ -9,11 +9,11 @@ output:
 ##Introduction
 Accessing data across organisations has traditionally required the physical transfer of data. This has long been the bane of both the data provider and the data consumer. Data is requested in many different ways, provided in many different formats (both file and data structure) and it is left up the consumer to piece it all together.
 
-In the geospatial world, recognising that there are a range of different software vendors with different proprietary formats, standard publishing mechanisms were established (by the Open Geospatial Consortium) to allow data to be shared in a platform-neutral manner. It wass then up to individual GIS/mapping clients to interpret the platform-neutral content and to demonstrate compliance with the open specifications.
+In the geospatial world, recognising that there are a range of different software vendors with different proprietary formats, standard publishing mechanisms were established (by the Open Geospatial Consortium) to allow data to be shared in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret the platform-neutral content and to demonstrate compliance with the open specifications.
 
 Recently, time-series data has been able to adopt this approach for data sharing. The introduction of request (SOS 2.0) and response (WaterML 2.0) standards by the OGC, conceivably, allows clients to adopt a common framework, simplifying data exchange. In the NZ national context, 16 Regional / Unitary Authorities publishing **water** data this way potentially allows for aggregation of data **across** organisation boundaries. Extending this to other domains (biodiversity, biosecurity, land, air, coast) has the potential to revolutionise public access to a wide range of previously hard to find information.
 
-For NZ, there are seven agencies that have data sharing systems in place - Northland Rc, Waikato RC, Horizons RC, Marlborough DC, ECan, Environment Southland & NIWA - with more coming online as systems are updated. The driver behind this is two-fold: 
+For NZ, there are seven agencies that have data sharing systems in place - Northland RC, Waikato RC, Horizons RC, Marlborough DC, ECan, Environment Southland & NIWA - with more coming online as systems are updated. The driver behind this is two-fold: 
 
 1. LAWA (http://www.lawa.org.nz),  where, the Regional Council Chief Executives have agreed to make data available for consumption through the LAWA website. 
 2. CRI's building on top of data federation concept to build systems specialising in data discovery across organisations.
@@ -62,12 +62,8 @@ library(pixmap)
 # INIT Settings
 source("SOS_Ref.R")
 
-USE_CACHE <- TRUE #TRUE
-runStatus <- TRUE    ## Pulling site and measurement information takes time.
-                      ## The WFS Scan and site table build only need be run
-                      ## As new councils are added, or on a nightly basis to
-                      ## update the data in the reference table.
-
+USE_CACHE_SITES <- TRUE# Scan WFS endpoints
+USE_CACHE_GDA   <- TRUE  # GetDataAvailability
 # Council SOS domain addresses
 # These addresses are currently the property of their respective councils. Please request permission 
 # from respective Hydrology teams to use the data from their servers
@@ -90,7 +86,7 @@ servers <- c("http://hilltop.nrc.govt.nz/data.hts?",
 
 ## For simplicities sake, unique WFS calls will be defined for each agency
 wfs <- c("http://hilltop.nrc.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
-         "http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.0.0",
+         "http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=WFS&request=GetFeature&typename=KiWIS:Station&version=1.1.0",
          "http://hilltopserver.horizons.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
          "http://hydro.marlborough.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList",
          "http://odp.es.govt.nz/data.hts?service=WFS&request=GetFeature&typename=SiteList")
@@ -98,7 +94,7 @@ wfs <- c("http://hilltop.nrc.govt.nz/data.hts?service=WFS&request=GetFeature&typ
 wfs_site_element <- c("Site","KiWIS:station_no","Site","Site","Site")
 
 
-if(USE_CACHE){
+if(USE_CACHE_SITES){
     ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
     ds <- dfsites
@@ -107,9 +103,14 @@ if(USE_CACHE){
     # For each council server specified...
     # Assumption is that gml:pos has coordinates recorded in lat,lon order
     for(i in 1:length(wfs)){
+                     
+        #cat(wfs[i],"\n")
+        # Code is susceptible to loss of web services (HTTP 503 errors will stop code execution)
+        # The tryCatch() approach will enable the code to continue running, but at the expense
+        # of lost services. This may have unintended consequences.
         getSites.xml <- xmlInternalTreeParse(wfs[i])
         
-        # In WFS, the <Site> element value is the sitename
+         # In WFS, the <Site> element value is the sitename
         site.list<-sapply(getNodeSet(getSites.xml,paste("//gml:pos/../../../",wfs_site_element[i],sep="")),xmlValue)
         
         # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
@@ -126,16 +127,19 @@ if(USE_CACHE){
             data.lon <- latlon[1,]
         }
         
+        # bind rows together from successive loops
         if(i==1){
             ds <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds$source <- servers[i]
         } else {
             ds1 <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds1$source <- servers[i]
-    
+        
             ds <- rbind(ds,ds1)
         }
+
     }
+    
     rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
     names(ds) <- c("SiteName","Lat","Lon","lastrun","source")
     # removing resource consent flow monitoring sites
@@ -143,9 +147,13 @@ if(USE_CACHE){
     # Remove site with strange latlon values
     ds <- ds[-2,]
     save(ds,file="dfSitesCouncils.Rdata")
-    
-} 
 
+}
+
+```
+
+**Site Map**
+```{r MakeASiteMap,echo=FALSE,fig.height=7}
 MakeMap(ds)
 
 ```
@@ -158,10 +166,11 @@ The example below could be modified to return valid date ranges for the `observe
 
 ```{r GetData}
 # Measurements to scan
-measurements <- c("Flow","Rainfall")
+# These are locally defined terms. Alternatives may be Discharge, Precipitation
+measurements <- c("Flow")
 
 ## GetDataAvailability for each measurement
-if(USE_CACHE){
+if(USE_CACHE_GDA){
     cat("Loading cached data ...\n")
     load("dsmMeasurements.Rdata")
     
@@ -172,7 +181,7 @@ if(USE_CACHE){
 }
 # Just select sites that have  flow data
 ds_flow <- subset(dsm,dsm$Flow == "OK")
-ds_rain <- subset(dsm,dsm$Rainfall == "OK")
+#ds_rain <- subset(dsm,dsm$Rainfall == "OK")
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
@@ -186,7 +195,7 @@ df_flow <- rcLastTVP(ds_flow,"Flow")
 ###Make a map
 
 
-```{r MakeAMap,echo=FALSE,fig.height=7}
+```{r MakeAFlowMap,echo=FALSE,fig.height=7}
 ## ===============================================================================
 ## Merging Data For Mapping
 df_flow <- df_flow[-2,]

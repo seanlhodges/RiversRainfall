@@ -20,11 +20,25 @@ rcData <- function(ds,measurements){
   for(m in 1:length(measurements)){
     for(i in 1:length(ds[,1])){
       
-      SOS_url <- paste(ds$source[i],"service=SOS",
-                       "&request=GetObservation",
-                       "&featureOfInterest=",ds$SiteName[i],
-                       "&observedProperty=",measurements[m],
-                       sep="")
+        if(substrRight(ds$source[i],1)=="&"){
+            
+            ## Using some Kister and Waikato specific KVP's
+            SOS_url <- paste(ds$source[i],"service=SOS&version=2.0",
+                             "&request=GetObservation",
+                             "&featureOfInterest=",ds$SiteName[i],
+                             "&procedure=Cmd.P",
+                             "&observedProperty=Discharge",
+                             sep="")
+        } else{
+            ## Using the minimal Hilltop KVPs
+            SOS_url <- paste(ds$source[i],"service=SOS",
+                             "&request=GetObservation",
+                             "&featureOfInterest=",ds$SiteName[i],
+                             "&observedProperty=",measurements[m],
+                             sep="")
+        }  
+        
+
       #cat(SOS_url,"\n")
       err.attr <- c("")
       err.list <- c("OK")
@@ -77,32 +91,71 @@ rcData <- function(ds,measurements){
 
 rcLastTVP <- function(df,measurement){
     for(i in 1:length(df[,1])){
+        
+        if(substrRight(df$source[i],1)=="&"){
             
-        SOS_url <- paste(df$source[i],"service=SOS",
+            ## Using some Kister and Waikato specific KVP's
+            SOS_url <- paste(df$source[i],"service=SOS&version=2.0",
+                         "&request=GetObservation",
+                         "&featureOfInterest=",df$SiteName[i],
+                         "&procedure=Cmd.P",
+                         "&observedProperty=Discharge",
+                         sep="")
+        } else{
+            ## Using the minimal Hilltop KVPs
+            SOS_url <- paste(df$source[i],"service=SOS",
                          "&request=GetObservation",
                          "&featureOfInterest=",df$SiteName[i],
                          "&observedProperty=",measurement,
                          sep="")
+        }  
+        
+        #Waikato Kisters request for river flow
+        # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+        #                   &request=GetObservation
+        #                   &featureOfInterest=64
+        #                   &procedure=Cmd.P
+        #                   &observedProperty=Discharge
+        #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+        
+        
+        #Waikato Kisters request for Precipitation
+        # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+        #                   &request=GetObservation
+        #                   &featureOfInterest=21
+        #                   &procedure=CmdTotal.P
+        #                   &observedProperty=Precipitation
+        #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+        
+        
         #cat(SOS_url,"\n")
         
-        getData.xml <- xmlInternalTreeParse(SOS_url)
-        xmltop <- xmlRoot(getData.xml)
-        
-        if(xmlName(xmltop)!="ExceptionReport"){
-            wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)
-            wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)
-        }
-        
-        if(i==1){
-            wml2Time <- c(wml2time)
-            wml2Value <- c(wml2value) 
-        } else {
-            wml2Time1 <- c(wml2time)
-            wml2Value1 <- c(wml2value) 
+        result = tryCatch({
+            getData.xml <- xmlInternalTreeParse(SOS_url)
             
-            wml2Time <- c(wml2Time,wml2Time1)
-            wml2Value <- c(wml2Value,wml2Value1) 
-        }
+        }, warning = function(w) {
+            
+        }, error = function(e) {
+            
+        }, finally = {
+            xmltop <- xmlRoot(getData.xml)
+            
+            if(xmlName(xmltop)!="ExceptionReport"){
+                wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)
+                wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)
+            }
+            
+            if(i==1){
+                wml2Time <- c(wml2time)
+                wml2Value <- c(wml2value) 
+            } else {
+                wml2Time1 <- c(wml2time)
+                wml2Value1 <- c(wml2value) 
+                
+                wml2Time <- c(wml2Time,wml2Time1)
+                wml2Value <- c(wml2Value,wml2Value1) 
+            }            
+        })
         
     }
         
@@ -166,4 +219,12 @@ MakeMap <- function(df){
     
     text(0,300,labels=c("Stations"),cex=2.5, col="white")
     
+}
+
+
+
+
+## String function to emulate excel function right()
+substrRight <- function(x, n){
+    substr(x, nchar(x)-n+1, nchar(x))
 }
