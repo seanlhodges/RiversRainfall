@@ -254,35 +254,52 @@ for(i in 1:length(df[,1])){
         xmltop <- xmlRoot(getData.xml)
         
         if(xmlName(xmltop)!="ExceptionReport"){
-            wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)[1]
-            wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)[1]
-            cat(wml2time,"\n")
-            cat(wml2value,"\n")
+            if(length(getNodeSet(getData.xml,"//wml2:point"))!=0){
+                wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)[1]
+                wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)[1]
+                cat(wml2time,"\n")
+                cat(wml2value,"\n")
+            } else {wml2time<-NA
+                wml2value<-NA}
         }
         
         if(i==1){
             wml2_Time <- wml2time
-            wml2_Value <- as.numeric(wml2value) 
+            wml2_Value <-as.numeric(wml2value)
+            ## Horizons stores flow as L/s. Others store it as m3/s. The following line adusts Horizons value
+            if(df$source[i]=="http://hilltopserver.horizons.govt.nz/data.hts?"){wml2_Value <- wml2_Value/1000}
+            ## Recoding negative values to NA
+            if(!anyNA(wml2_Value)){
+                if(wml2_Value < 0){wml2_Value <- NA}
+            }
 
         } else {
             wml2_Time1 <- wml2time
-            wml2_Value1 <- as.numeric(wml2value) 
-
+            wml2_Value1 <- as.numeric(wml2value)
+            ## Horizons stores flow as L/s. Others store it as m3/s. The following line adusts Horizons value
+            if(df$source[i]=="http://hilltopserver.horizons.govt.nz/data.hts?"){wml2_Value1 <- wml2_Value1/1000}
+            ## Recoding negative values to NA
+            if(!anyNA(wml2_Value1)){
+                if(wml2_Value1 < 0){wml2_Value1 <- NA}
+            }
             
             wml2_Time <- c(wml2_Time,wml2_Time1)
             wml2_Value <- c(wml2_Value,wml2_Value1) 
-        }            
+            rm(wml2_Time1,wml2_Value1)
+        }
+        rm(SOS_url,wml2time,wml2value)
     })
     
 }
-    
+
 
 #Append each measurements output vector to the data.frame as a new column
-df[,length(df)+1] <- wml2Time  ### Add wml2Time
+df[,length(df)+1] <- wml2_Time  ### Add wml2Time
 colnames(df)[length(df)] <-  c("DateTime")
-df[,length(df)+1] <- wml2Value  ### Add wml2Value
+df[,length(df)+1] <- wml2_Value  ### Add wml2Value
 colnames(df)[length(df)] <-  c("Value")
 
+rm(wml2_Time,wml2_Value)
 
 
 #df_rain <- rcLastTVP(ds_rain,"Rainfall")
