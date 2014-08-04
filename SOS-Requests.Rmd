@@ -47,7 +47,6 @@ The demonstration that follows is a trivial use-case of showing the last recorde
 library(XML)
 library(sp)
 library(RgoogleMaps)
-library(pixmap)
 
 ```
 
@@ -97,7 +96,7 @@ wfs_site_element <- c("Site","KiWIS:station_no","Site","Site","Site")
 if(USE_CACHE_SITES){
     ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
-    ds <- dfsites
+    #ds <- dfsites
     
 } else{
     # For each council server specified...
@@ -186,7 +185,106 @@ ds_flow <- subset(dsm,dsm$Flow == "OK")
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
 ## For each site that has measurement data, get the last value ...
-df_flow <- rcLastTVP(ds_flow,"Flow")
+
+#df_flow <- rcLastTVP(ds_flow,"Flow")
+
+df <-ds_flow
+measurement <- "Flow"
+
+for(i in 1:length(df[,1])){
+    
+    if(substrRight(df$source[i],1)=="&"){
+        
+        ## Using some Kister and Waikato specific KVP's
+        SOS_url <- paste(df$source[i],"service=SOS&version=2.0",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df$SiteName[i],
+                     "&procedure=Cmd.P",
+                     "&observedProperty=Discharge",
+                     sep="")
+    } else{
+        ## Using the minimal Hilltop KVPs
+        SOS_url <- paste(df$source[i],"service=SOS",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df$SiteName[i],
+                     "&observedProperty=",measurement,
+                     sep="")
+    }  
+    
+    SOS_url <- gsub(" ","%20",SOS_url)
+    
+    #Waikato Kisters request for river flow
+    # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+    #                   &request=GetObservation
+    #                   &featureOfInterest=64
+    #                   &procedure=Cmd.P
+    #                   &observedProperty=Discharge
+    #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+    
+    
+    #Waikato Kisters request for Precipitation
+    # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+    #                   &request=GetObservation
+    #                   &featureOfInterest=21
+    #                   &procedure=CmdTotal.P
+    #                   &observedProperty=Precipitation
+    #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+    
+    
+    cat(SOS_url,"\n")
+    
+    result = tryCatch({
+        getData.xml <- xmlInternalTreeParse(SOS_url)
+        
+    }, warning = function(w) {
+        
+    }, error = function(e) {
+        if(i==1){
+            wml2Time <- NA
+            wml2Value <- NA
+        } else {
+            wml2Time1 <- NA
+            wml2Value1 <- NA
+            
+            wml2Time <- c(wml2Time,wml2Time1)
+            wml2Value <- c(wml2Value,wml2Value1) 
+        } 
+        
+    }, finally = {
+        xmltop <- xmlRoot(getData.xml)
+        
+        if(xmlName(xmltop)!="ExceptionReport"){
+            wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)[1]
+            wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)[1]
+            cat(wml2time,"\n")
+            cat(wml2value,"\n")
+        }
+        
+        if(i==1){
+            wml2_Time <- wml2time
+            wml2_Value <- as.numeric(wml2value) 
+
+        } else {
+            wml2_Time1 <- wml2time
+            wml2_Value1 <- as.numeric(wml2value) 
+
+            
+            wml2_Time <- c(wml2_Time,wml2_Time1)
+            wml2_Value <- c(wml2_Value,wml2_Value1) 
+        }            
+    })
+    
+}
+    
+
+#Append each measurements output vector to the data.frame as a new column
+df[,length(df)+1] <- wml2Time  ### Add wml2Time
+colnames(df)[length(df)] <-  c("DateTime")
+df[,length(df)+1] <- wml2Value  ### Add wml2Value
+colnames(df)[length(df)] <-  c("Value")
+
+
+
 #df_rain <- rcLastTVP(ds_rain,"Rainfall")
 
 ```

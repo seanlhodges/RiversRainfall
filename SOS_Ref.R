@@ -38,8 +38,9 @@ rcData <- function(ds,measurements){
                              sep="")
         }  
         
+        SOS_url <- gsub(" ","%20",SOS_url)
 
-      #cat(SOS_url,"\n")
+      cat(SOS_url,"\n")
       err.attr <- c("")
       err.list <- c("OK")
       result = tryCatch({
@@ -90,6 +91,7 @@ rcData <- function(ds,measurements){
 #####################################################################################
 
 rcLastTVP <- function(df,measurement){
+    
     for(i in 1:length(df[,1])){
         
         if(substrRight(df$source[i],1)=="&"){
@@ -110,6 +112,8 @@ rcLastTVP <- function(df,measurement){
                          sep="")
         }  
         
+        SOS_url <- gsub(" ","%20",SOS_url)
+        
         #Waikato Kisters request for river flow
         # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
         #                   &request=GetObservation
@@ -128,7 +132,7 @@ rcLastTVP <- function(df,measurement){
         #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
         
         
-        #cat(SOS_url,"\n")
+        cat(SOS_url,"\n")
         
         result = tryCatch({
             getData.xml <- xmlInternalTreeParse(SOS_url)
@@ -136,6 +140,16 @@ rcLastTVP <- function(df,measurement){
         }, warning = function(w) {
             
         }, error = function(e) {
+            if(i==1){
+                wml2Time <- NA
+                wml2Value <- NA
+            } else {
+                wml2Time1 <- NA
+                wml2Value1 <- NA
+                
+                wml2Time <- c(wml2Time,wml2Time1)
+                wml2Value <- c(wml2Value,wml2Value1) 
+            } 
             
         }, finally = {
             xmltop <- xmlRoot(getData.xml)
