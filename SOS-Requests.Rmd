@@ -1,6 +1,6 @@
 ---
 title: "Using SOS 2.0 to access time-series data"
-date: "July 30, 2014"
+date: "August 5, 2014"
 output:
   html_document:
     keep_md: yes
@@ -231,7 +231,7 @@ for(i in 1:length(df[,1])){
     #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
     
     
-    cat(SOS_url,"\n")
+    #cat(SOS_url,"\n")
     
     result = tryCatch({
         getData.xml <- xmlInternalTreeParse(SOS_url)
@@ -257,8 +257,8 @@ for(i in 1:length(df[,1])){
             if(length(getNodeSet(getData.xml,"//wml2:point"))!=0){
                 wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)[1]
                 wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)[1]
-                cat(wml2time,"\n")
-                cat(wml2value,"\n")
+                #cat(wml2time,"\n")
+                #cat(wml2value,"\n")
             } else {wml2time<-NA
                 wml2value<-NA}
         }
@@ -293,16 +293,20 @@ for(i in 1:length(df[,1])){
 }
 
 
-#Append each measurements output vector to the data.frame as a new column
+## Append each measurements output vector to the data.frame as a new column
+
+# DateTime inclusion and conversion to POSIXlt DateTime
 df[,length(df)+1] <- wml2_Time  ### Add wml2Time
 colnames(df)[length(df)] <-  c("DateTime")
+df$DateTime<-strptime(df$DateTime,"%Y-%m-%dT%H:%M:%S")
+
+# Measurement value. Data type set to numeric when vector created.
 df[,length(df)+1] <- wml2_Value  ### Add wml2Value
 colnames(df)[length(df)] <-  c("Value")
 
-rm(wml2_Time,wml2_Value)
+# Housekeeping
+rm(wml2_Time,wml2_Value,xmltop)
 
-
-#df_rain <- rcLastTVP(ds_rain,"Rainfall")
 
 ```
 
@@ -312,19 +316,16 @@ rm(wml2_Time,wml2_Value)
 
 ```{r MakeAFlowMap,echo=FALSE,fig.height=7}
 ## ===============================================================================
-## Merging Data For Mapping
-df_flow <- df_flow[-2,]
-df<-as.data.frame(merge(ds,df_flow,by=c("SiteName","SiteName")))
-#colnames(df)<-c("SiteName","Lat","Lon","Date","Value")
-df$Lat<-as.numeric(df$Lat.x)
-df$Lon<-as.numeric(df$Lon.x)
-df$DateTime<-strptime(df$DateTime,"%Y-%m-%dT%H:%M:%S")
-df$Value<-as.numeric(df$Value)
+## Mapping the measurement data
 
-# Just for flow so far
+## Removing NAs from the dataframe prior to mapping. Not essential.
+df <- na.omit(df)
+
+# Setting variables that specify how map output will be displayed
 maxValue=4000
-colValue="blue"
+colValue="royalblue"
 legendTitle="Flow m3/s"
+
 
 #Resizing variable to a 0-100 range for plotting and putting this data into
 # df$StdValue column.

@@ -1,10 +1,10 @@
 # Using SOS 2.0 to access time-series data
-July 30, 2014  
+August 5, 2014  
 
 ##Introduction
 Accessing data across organisations has traditionally required the physical transfer of data. This has long been the bane of both the data provider and the data consumer. Data is requested in many different ways, provided in many different formats (both file and data structure) and it is left up the consumer to piece it all together.
 
-In the geospatial world, recognising that there are a range of different software vendors with different proprietary formats, standard publishing mechanisms were established (by the Open Geospatial Consortium) to allow data to be shared in a platform-neutral manner. It wass then up to individual GIS/mapping clients to interpret the platform-neutral content and to demonstrate compliance with the open specifications.
+In the geospatial world, recognising that there are a range of different software vendors with different proprietary formats, standard publishing mechanisms were established (by the Open Geospatial Consortium) to allow data to be shared in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret the platform-neutral content and to demonstrate compliance with the open specifications.
 
 Recently, time-series data has been able to adopt this approach for data sharing. The introduction of request (SOS 2.0) and response (WaterML 2.0) standards by the OGC, conceivably, allows clients to adopt a common framework, simplifying data exchange. In the NZ national context, 16 Regional / Unitary Authorities publishing **water** data this way potentially allows for aggregation of data **across** organisation boundaries. Extending this to other domains (biodiversity, biosecurity, land, air, coast) has the potential to revolutionise public access to a wide range of previously hard to find information.
 
@@ -42,7 +42,6 @@ The demonstration that follows is a trivial use-case of showing the last recorde
 library(XML)
 library(sp)
 library(RgoogleMaps)
-library(pixmap)
 ```
 
 
@@ -56,7 +55,7 @@ library(pixmap)
 # INIT Settings
 source("SOS_Ref.R")
 
-USE_CACHE_SITES <- FALSE # Scan WFS endpoints
+USE_CACHE_SITES <- TRUE# Scan WFS endpoints
 USE_CACHE_GDA   <- TRUE  # GetDataAvailability
 # Council SOS domain addresses
 # These addresses are currently the property of their respective councils. Please request permission 
@@ -91,15 +90,20 @@ wfs_site_element <- c("Site","KiWIS:station_no","Site","Site","Site")
 if(USE_CACHE_SITES){
     ## Load the one prepared earlier
     load("dfSitesCouncils.Rdata")
-    ds <- dfsites
+    #ds <- dfsites
     
 } else{
     # For each council server specified...
     # Assumption is that gml:pos has coordinates recorded in lat,lon order
     for(i in 1:length(wfs)){
+                     
+        #cat(wfs[i],"\n")
+        # Code is susceptible to loss of web services (HTTP 503 errors will stop code execution)
+        # The tryCatch() approach will enable the code to continue running, but at the expense
+        # of lost services. This may have unintended consequences.
         getSites.xml <- xmlInternalTreeParse(wfs[i])
-
-        # In WFS, the <Site> element value is the sitename
+        
+         # In WFS, the <Site> element value is the sitename
         site.list<-sapply(getNodeSet(getSites.xml,paste("//gml:pos/../../../",wfs_site_element[i],sep="")),xmlValue)
         
         # In WFS, lat lon are specified as the value in the <gml:pos> element, separated by a single space.
@@ -116,16 +120,19 @@ if(USE_CACHE_SITES){
             data.lon <- latlon[1,]
         }
         
+        # bind rows together from successive loops
         if(i==1){
             ds <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds$source <- servers[i]
         } else {
             ds1 <-data.frame(site.list,data.lat,data.lon,Sys.time(), stringsAsFactors=FALSE)
             ds1$source <- servers[i]
-    
+        
             ds <- rbind(ds,ds1)
         }
+
     }
+    
     rm(ds1,data.lat,data.lon,latlon,data.latlon,site.list,getSites.xml,i)
     names(ds) <- c("SiteName","Lat","Lon","lastrun","source")
     # removing resource consent flow monitoring sites
@@ -133,8 +140,8 @@ if(USE_CACHE_SITES){
     # Remove site with strange latlon values
     ds <- ds[-2,]
     save(ds,file="dfSitesCouncils.Rdata")
-    
-} 
+
+}
 ```
 
 **Site Map**
@@ -149,7 +156,8 @@ The example below could be modified to return valid date ranges for the `observe
 
 ```r
 # Measurements to scan
-measurements <- c("Flow","Rainfall")
+# These are locally defined terms. Alternatives may be Discharge, Precipitation
+measurements <- c("Flow")
 
 ## GetDataAvailability for each measurement
 if(USE_CACHE_GDA){
@@ -170,13 +178,132 @@ if(USE_CACHE_GDA){
 ```r
 # Just select sites that have  flow data
 ds_flow <- subset(dsm,dsm$Flow == "OK")
-ds_rain <- subset(dsm,dsm$Rainfall == "OK")
+#ds_rain <- subset(dsm,dsm$Rainfall == "OK")
 
 ## ===============================================================================
 ## Getting Measurement Data for Mapping.
 ## For each site that has measurement data, get the last value ...
-df_flow <- rcLastTVP(ds_flow,"Flow")
-#df_rain <- rcLastTVP(ds_rain,"Rainfall")
+
+#df_flow <- rcLastTVP(ds_flow,"Flow")
+
+df <-ds_flow
+measurement <- "Flow"
+
+for(i in 1:length(df[,1])){
+    
+    if(substrRight(df$source[i],1)=="&"){
+        
+        ## Using some Kister and Waikato specific KVP's
+        SOS_url <- paste(df$source[i],"service=SOS&version=2.0",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df$SiteName[i],
+                     "&procedure=Cmd.P",
+                     "&observedProperty=Discharge",
+                     sep="")
+    } else{
+        ## Using the minimal Hilltop KVPs
+        SOS_url <- paste(df$source[i],"service=SOS",
+                     "&request=GetObservation",
+                     "&featureOfInterest=",df$SiteName[i],
+                     "&observedProperty=",measurement,
+                     sep="")
+    }  
+    
+    SOS_url <- gsub(" ","%20",SOS_url)
+    
+    #Waikato Kisters request for river flow
+    # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+    #                   &request=GetObservation
+    #                   &featureOfInterest=64
+    #                   &procedure=Cmd.P
+    #                   &observedProperty=Discharge
+    #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+    
+    
+    #Waikato Kisters request for Precipitation
+    # http://envdata.waikatoregion.govt.nz:8080/KiWIS/KiWIS?datasource=0&service=SOS&version=2.0
+    #                   &request=GetObservation
+    #                   &featureOfInterest=21
+    #                   &procedure=CmdTotal.P
+    #                   &observedProperty=Precipitation
+    #                   &temporalFilter=om:phenomenonTime,2014-01-28T15:00:00/2014-01-29T15:00:00
+    
+    
+    #cat(SOS_url,"\n")
+    
+    result = tryCatch({
+        getData.xml <- xmlInternalTreeParse(SOS_url)
+        
+    }, warning = function(w) {
+        
+    }, error = function(e) {
+        if(i==1){
+            wml2Time <- NA
+            wml2Value <- NA
+        } else {
+            wml2Time1 <- NA
+            wml2Value1 <- NA
+            
+            wml2Time <- c(wml2Time,wml2Time1)
+            wml2Value <- c(wml2Value,wml2Value1) 
+        } 
+        
+    }, finally = {
+        xmltop <- xmlRoot(getData.xml)
+        
+        if(xmlName(xmltop)!="ExceptionReport"){
+            if(length(getNodeSet(getData.xml,"//wml2:point"))!=0){
+                wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)[1]
+                wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)[1]
+                #cat(wml2time,"\n")
+                #cat(wml2value,"\n")
+            } else {wml2time<-NA
+                wml2value<-NA}
+        }
+        
+        if(i==1){
+            wml2_Time <- wml2time
+            wml2_Value <-as.numeric(wml2value)
+            ## Horizons stores flow as L/s. Others store it as m3/s. The following line adusts Horizons value
+            if(df$source[i]=="http://hilltopserver.horizons.govt.nz/data.hts?"){wml2_Value <- wml2_Value/1000}
+            ## Recoding negative values to NA
+            if(!anyNA(wml2_Value)){
+                if(wml2_Value < 0){wml2_Value <- NA}
+            }
+
+        } else {
+            wml2_Time1 <- wml2time
+            wml2_Value1 <- as.numeric(wml2value)
+            ## Horizons stores flow as L/s. Others store it as m3/s. The following line adusts Horizons value
+            if(df$source[i]=="http://hilltopserver.horizons.govt.nz/data.hts?"){wml2_Value1 <- wml2_Value1/1000}
+            ## Recoding negative values to NA
+            if(!anyNA(wml2_Value1)){
+                if(wml2_Value1 < 0){wml2_Value1 <- NA}
+            }
+            
+            wml2_Time <- c(wml2_Time,wml2_Time1)
+            wml2_Value <- c(wml2_Value,wml2_Value1) 
+            rm(wml2_Time1,wml2_Value1)
+        }
+        rm(SOS_url,wml2time,wml2value)
+    })
+    
+}
+
+
+## Append each measurements output vector to the data.frame as a new column
+
+# DateTime inclusion and conversion to POSIXlt DateTime
+df[,length(df)+1] <- wml2_Time  ### Add wml2Time
+colnames(df)[length(df)] <-  c("DateTime")
+df$DateTime<-strptime(df$DateTime,"%Y-%m-%dT%H:%M:%S")
+
+# Measurement value. Data type set to numeric when vector created.
+df[,length(df)+1] <- wml2_Value  ### Add wml2Value
+colnames(df)[length(df)] <-  c("Value")
+
+# Housekeeping
+rm(wml2_Time,wml2_Value,xmltop)
 ```
 
 
