@@ -1,28 +1,32 @@
 ---
 title: "Using SOS 2.0 to access time-series data"
-date: "August 5, 2014"
 output:
   html_document:
     keep_md: yes
+  word_document: default
+date: "August 5, 2014"
 ---
 
 ##Introduction
-Accessing data across organisations has traditionally required the physical transfer of data. This has long been the bane of both the data provider and the data consumer. Data is requested in many different ways, provided in many different formats (both file and data structure) and it is left up the consumer to piece it all together.
+Accessing data from other organisations has traditionally required the physical transfer of data. Data is moved using common file formats as defacto encodings (for example, fixed format text, delimited text or Excel files). The structure of data stored within the file format is based on presentation. Generally, there is a need to explain the method of presentation to the consumer. This is compounded when requesting data from many organisations - with no generally accepted uniform way to provide data, subtle or substantive differences in data presentation will occur (even when requests are relatively simple). The resulting back-and-forth explanation of data presentation has long been the bane of both the data provider and the data consumer - it is left up the consumer to piece it all together.
 
-In the geospatial world, recognising that there are a range of different software vendors with different proprietary formats, standard publishing mechanisms were established (by the Open Geospatial Consortium) to allow data to be shared in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret the platform-neutral content and to demonstrate compliance with the open specifications.
+In the geospatial world, recognising that there were a range of different software vendors with different encoding formats, standardised specificaions were established by the Open Geospatial Consortium (OGC), allowing data to be exchanged in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret platform-neutral content and demonstrate compliance with open specifications.
 
-Recently, time-series data has been able to adopt this approach for data sharing. The introduction of request (SOS 2.0) and response (WaterML 2.0) standards by the OGC, conceivably, allows clients to adopt a common framework, simplifying data exchange. In the NZ national context, 16 Regional / Unitary Authorities publishing **water** data this way potentially allows for aggregation of data **across** organisation boundaries. Extending this to other domains (biodiversity, biosecurity, land, air, coast) has the potential to revolutionise public access to a wide range of previously hard to find information.
+Recently, work has been completed that allows time-series data to adopt this approach for data sharing. The introduction of request (SOS 2.0) and response (WaterML 2.0) specifications by the OGC allows software clients to adopt a common framework, simplifying data exchange. In the New Zealand context, the implication organisations publishing **water** data this way potentially allows for aggregation of data **across** organisation boundaries. Extending this to other domains (biodiversity, biosecurity, land, air, coast) has the potential to revolutionise public access to a wide range of previously hard to access information.
 
-For NZ, there are seven agencies that have data sharing systems in place - Northland RC, Waikato RC, Horizons RC, Marlborough DC, ECan, Environment Southland & NIWA - with more coming online as systems are updated. The driver behind this is two-fold: 
+To date, there are six NZ agencies that have OGC-compliant systems for sharing time-series data - Northland RC, Waikato RC, Horizons RC, Marlborough DC, ECan, Environment Southland & NIWA - with more coming online as systems are updated. A lot of activity has occurred over the last 12 months in space, with two main drivers:
 
-1. LAWA (http://www.lawa.org.nz),  where, the Regional Council Chief Executives have agreed to make data available for consumption through the LAWA website. 
-2. CRI's building on top of data federation concept to build systems specialising in data discovery across organisations.
+1. LAWA (http://www.lawa.org.nz),  where, the Regional Council Chief Executives  and Chairs have agreed to make data available for consumption through the LAWA website. 
+2. CRI's investing in systems specialising in environmental data discovery and delivery.
 
-For this document, five of the above listed agencies are accessed to demonstrate how a cross-agency data summary might be constructed. The approach taken is to:
+The net result is that a critical mass of agencies adopting OGC specifications for data exchange in the environmental domains has been achieved. While other mechanisms for data exchange are also available (but platform dependent eg. Kisters Query Service), the acceptance of OGC as providing the core data exchange specification is a significant step in improving data exchange to support the delivery of portals such as LAWA.
+
+For this document, five of the above listed agencies are accessed using the OGC specifications to demonstrate how a cross-agency data summary might be constructed. The approach taken is as follows:
 1. Aggregate location information across selected agencies, creating `featureOfInterest` reference data.
-2. Determine whether an `observedProperty` has any data available for a specific locatoin (the equivalent of a GetDataAvailability call, but without date range);
-3. Retrieve the last recorded data value from each `observedProperty` for the `featureOfInterest` determined at step 1.
-4. Make a map of values
+2. From an *a priori* list, determine whether an `observedProperty` has any data available for a specific locatoin (the equivalent of a GetDataAvailability call, but without date range);
+3. Retrieve the last recorded data value from each `observedProperty` (and `procedure` where required) for the `featureOfInterest` determined at step 1.
+4. Make a simple table to summarise responses
+5. Make a map of values
 
 
 ##Methods
@@ -35,10 +39,12 @@ The R code this document assumes the following OGC request and data format stand
 Some error checking is undertaken. Sites are exluded where location coordinates are not available or coordinates do not fall near NZ. Order of Lat-lon values has been considered for different implementations. Coordinates may fall outside NZ where servers have not been correctly configured to handle projections. Server maintainers may be notified where this is discovered. Finally, where an exception reports or other unexpected responses are returned from SOS requests, a `tryCatch()` approach has been adopted to ensure code execution is not interrupted..
 
 
-##Demonstrated federated data access
-The R script below sets up data access to each Council and pulls time-series data via SOS-based requests. Some of the requests used below are easier to implement in the host systems native RESTful services, but this would defeat the purpose of this document. Federation of water data, based on OGC standards, is the key component to implementing a common set of rules for engangement between agencies.
+##Demonstrated federated data access using R
+[R](http://R-project.org/), a language and environment for statistical computing, is being used to demonstrated federated data access.
 
-The demonstration that follows is a trivial use-case of showing the last recorded value for discharge at a water-level monitoring site. In undertaking this exercise, evaluation of using OGC standards for a request/response framework can be undertaken.
+The R code chunks below set up data access to each Council and pulls time-series data via SOS-based requests. Some of the requests used below are easier to implement in the host systems native RESTful services, but this would defeat the purpose of this document. Federation of water data, based on OGC specifications, is the key component to implementing a common set of rules for engangement between agencies.
+
+The demonstration that follows is a trivial use-case of showing the last recorded value for discharge at a water-level monitoring site. In undertaking this exercise, evaluation of using OGC specifications for a request/response framework can be undertaken.
 
 ###Loading libraries
 
@@ -47,6 +53,7 @@ The demonstration that follows is a trivial use-case of showing the last recorde
 library(XML)
 library(sp)
 library(RgoogleMaps)
+library(googleVis)
 
 ```
 
@@ -54,6 +61,11 @@ library(RgoogleMaps)
 
 ###Build reference data
 **Site table**
+The first step is to build a list of sites where environmental data are recorded. Accessing the WFS services and requesting a list of sites enables this list of sites to be created. 
+
+Limitation: Schemas are potentially different across servers, so the simple approach here is to simply retrieve the lat/long data and hard code the call to retrieve the site name that will be used later to retrieve data via the SOS request.
+
+Defining a schema for site data, based on terms used by SOS, would simplify compilation of reference data.
 
 ```{r GetSites}
 
@@ -152,12 +164,15 @@ if(USE_CACHE_SITES){
 ```
 
 **Site Map**
+
+A quick map to show the what reference data has been constructed. A tabular summary of Council and number of sites would also be useful here.
 ```{r MakeASiteMap,echo=FALSE,fig.height=7}
 MakeMap(ds)
 
 ```
 
 **GetDataAvailability**
+
 With a valid list of sites, the next step is to establish what data is available. A `GetDataAvailability` call against a SOS server would be convenient. However, for those servers not currently supporting this call, a slightly longer process is required to *discover* what is avialable. The only pre-condition is that the names of the `observedProperty` can be determined by other means beforehand. For this purposes of this example, the following `observedProperty` values have been chosen: Flow, Rainfall, Water Temperature.
 
 The example below could be modified to return valid date ranges for the `observedProperty`'s in question if necessary.
