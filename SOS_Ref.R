@@ -238,6 +238,86 @@ MakeMap <- function(df){
 
 
 
+TimeSeriesSlider <- function(df,stn,measurement){
+
+        
+        if(substrRight(df$source[stn],1)=="&"){
+            
+            ## Using some Kister and Waikato specific KVP's
+            SOS_url <- paste(df$source[stn],"service=SOS&version=2.0",
+                             "&request=GetObservation",
+                             "&featureOfInterest=",df$SiteName[stn],
+                             "&procedure=Cmd.P",
+                             "&observedProperty=Discharge",
+                             sep="")
+        } else{
+            ## Using the minimal Hilltop KVPs
+            SOS_url <- paste(df$source[stn],"service=SOS",
+                             "&request=GetObservation",
+                             "&featureOfInterest=",df$SiteName[stn],
+                             "&observedProperty=",measurement,
+                             sep="")
+        }  
+        
+        # Adding temporalFilter to SOS call
+        #SOS_url <- paste(SOS_url,"&temporalFilter=om:phenomenonTime,P7D")
+        SOS_url <- paste(SOS_url,"&temporalFilter=om:phenomenonTime,2014-08-01T00:00:00/2014-08-08T00:00:00",sep="")
+        
+        #Replacing spaces with %20 in url
+        SOS_url <- gsub(" ","%20",SOS_url)    
+        cat(SOS_url,"\n")
+        
+        result = tryCatch({
+            getData.xml <- xmlInternalTreeParse(SOS_url)
+            
+        }, warning = function(w) {
+            
+        }, error = function(e) {
+            
+            wml2Time <- NA
+            wml2Value <- NA 
+            
+        }, finally = {
+            xmltop <- xmlRoot(getData.xml)
+            
+            if(xmlName(xmltop)!="ExceptionReport"){
+                if(length(getNodeSet(getData.xml,"//wml2:point"))!=0){
+                    wml2time<-sapply(getNodeSet(getData.xml,"//wml2:time"),xmlValue)
+                    wml2value<-sapply(getNodeSet(getData.xml,"//wml2:value"),xmlValue)
+                } else {wml2time<-NA
+                        wml2value<-NA
+                }
+            }
+            
+            wml2_Time <- wml2time
+            wml2_Value <-as.numeric(wml2value)
+            ## Horizons stores flow as L/s. Others store it as m3/s. The following line adusts Horizons value
+            if(df$source[stn]=="http://hilltopserver.horizons.govt.nz/data.hts?"){wml2_Value <- wml2_Value/1000}
+            ## Recoding negative values to NA
+            if(!anyNA(wml2_Value)){
+                if(wml2_Value < 0){wml2_Value <- NA}
+            }
+            
+        })
+        
+        # data review
+        df_P7D <- data.frame(wml2_Time,wml2_Value)
+        names(df_P7D) <- c("Date","Value")
+        df_P7D$Date <- strptime(df_P7D$Date,format="%Y-%m-%dT%H:%M:%S")
+        summary(df_P7D)
+        
+        # gvisChart of some sort
+        AnnoTimeLine  <- gvisAnnotatedTimeLine(df_P7D, 
+                                               datevar="Date",
+                                               numvar="Value", 
+                                               options=list(displayAnnotations=FALSE,
+                                                            width="600px", height="350px"))
+        plot(AnnoTimeLine)
+            
+}
+
+
+
 ## String function to emulate excel function right()
 substrRight <- function(x, n){
     substr(x, nchar(x)-n+1, nchar(x))

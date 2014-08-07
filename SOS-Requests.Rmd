@@ -4,13 +4,13 @@ output:
   html_document:
     keep_md: yes
   word_document: default
-date: "August 5, 2014"
+date: "August 8, 2014"
 ---
 
 ##Introduction
 Accessing data from other organisations has traditionally required the physical transfer of data. Data is moved using common file formats as defacto encodings (for example, fixed format text, delimited text or Excel files). The structure of data stored within the file format is based on presentation. Generally, there is a need to explain the method of presentation to the consumer. This is compounded when requesting data from many organisations - with no generally accepted uniform way to provide data, subtle or substantive differences in data presentation will occur (even when requests are relatively simple). The resulting back-and-forth explanation of data presentation has long been the bane of both the data provider and the data consumer - it is left up the consumer to piece it all together.
 
-In the geospatial world, recognising that there were a range of different software vendors with different encoding formats, standardised specificaions were established by the Open Geospatial Consortium (OGC), allowing data to be exchanged in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret platform-neutral content and demonstrate compliance with open specifications.
+In the geospatial world, recognising that there were a range of different software vendors with different encoding formats, standardised specifications were established by the Open Geospatial Consortium (OGC), allowing data to be exchanged in a platform-neutral manner. It was then up to individual GIS/mapping clients to interpret platform-neutral content and demonstrate compliance with open specifications.
 
 Recently, work has been completed that allows time-series data to adopt this approach for data sharing. The introduction of request (SOS 2.0) and response (WaterML 2.0) specifications by the OGC allows software clients to adopt a common framework, simplifying data exchange. In the New Zealand context, the implication organisations publishing **water** data this way potentially allows for aggregation of data **across** organisation boundaries. Extending this to other domains (biodiversity, biosecurity, land, air, coast) has the potential to revolutionise public access to a wide range of previously hard to access information.
 
@@ -19,7 +19,7 @@ To date, there are six NZ agencies that have OGC-compliant systems for sharing t
 1. LAWA (http://www.lawa.org.nz),  where, the Regional Council Chief Executives  and Chairs have agreed to make data available for consumption through the LAWA website. 
 2. CRI's investing in systems specialising in environmental data discovery and delivery.
 
-The net result is that a critical mass of agencies adopting OGC specifications for data exchange in the environmental domains has been achieved. While other mechanisms for data exchange are also available (but platform dependent eg. Kisters Query Service), the acceptance of OGC as providing the core data exchange specification is a significant step in improving data exchange to support the delivery of portals such as LAWA.
+The net result is that a critical mass of agencies adopting OGC specifications for data exchange in the environmental domains has been achieved. While other mechanisms for data exchange are also available (but platform dependent, such as *Kisters Query Service*), the acceptance of OGC as providing the core data exchange specification is a significant step in improving data exchange to support the delivery of portals such as LAWA.
 
 For this document, five of the above listed agencies are accessed using the OGC specifications to demonstrate how a cross-agency data summary might be constructed. The approach taken is as follows:
 1. Aggregate location information across selected agencies, creating `featureOfInterest` reference data.
@@ -54,6 +54,7 @@ library(XML)
 library(sp)
 library(RgoogleMaps)
 library(googleVis)
+op <- options(gvis.plot.tag='chart')
 
 ```
 
@@ -61,6 +62,7 @@ library(googleVis)
 
 ###Build reference data
 **Site table**
+
 The first step is to build a list of sites where environmental data are recorded. Accessing the WFS services and requesting a list of sites enables this list of sites to be created. 
 
 Limitation: Schemas are potentially different across servers, so the simple approach here is to simply retrieve the lat/long data and hard code the call to retrieve the site name that will be used later to retrieve data via the SOS request.
@@ -397,4 +399,26 @@ rect(-320,280,320,320,col="cornflowerblue")
 
 text(0,300,labels=c("Flow stations"),cex=2.5, col="white")
 text(0,-300,labels=c("Horizons Regional Council Disclaimer Applies"),cex=0.7)
+
 ```
+
+###Charting
+
+A final examination of the SOS request is the inclusion of the `temporalFilter` element. The time period can be explicitly specified using a date range, with date/time representations based on the ISO8601 standard. Further, fixed time ranges can be specified using a duration string. This will be tested across servers. A single site from each region has been selected for testing.
+
+
+``` {r gvisCharts, results='asis'}
+
+
+stations <- c(11,33,123)
+
+measurement <- "Flow"
+
+TimeSeriesSlider(df_flow,1,measurement)
+TimeSeriesSlider(df_flow,34,measurement)
+TimeSeriesSlider(df_flow,123,measurement)
+
+
+
+```
+
